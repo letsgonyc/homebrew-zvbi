@@ -4,8 +4,9 @@
  *  Copyright (C) 1999-2000 Michael H. Schimek
  *
  *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License version 2 as
- *  published by the Free Software Foundation.
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) version 2.
  *
  *  This program is distributed in the hope that it will be useful,
  *  but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -17,7 +18,7 @@
  *  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-/* $Id: tables.c,v 1.4 2001-12-14 10:12:36 mschimek Exp $ */
+/* $Id: tables.c,v 1.1.1.1 2001-08-07 22:10:09 garetxe Exp $ */
 
 #include "mpeg.h"
 
@@ -31,16 +32,6 @@ frame_rate_value[16] =
 	24000.0 / 1001, 24.0,
 	25.0, 30000.0 / 1001, 30.0,
 	50.0, 60000.0 / 1001, 60.0
-};
-
-/* ? */
-const double
-aspect_ratio_value[16] =
-{
-	0,      1.0,	0.6735,	0.7031,
-	0.7615,	0.8055,	0.8437,	0.8935,
-	0.9375,	0.9815,	1.0255,	1.0695,
-	1.1250,	1.1575,	1.2015,	0
 };
 
 /*
@@ -563,7 +554,7 @@ dct_coeff_one_vlc[] =
  *  Translate VLC(), returns bit length
  */
 int
-mp1e_vlc(unsigned long long vlc_octet, unsigned int *code)
+vlc(unsigned long long vlc_octet, unsigned int *code)
 {
 	int i;
 
@@ -581,13 +572,13 @@ mp1e_vlc(unsigned long long vlc_octet, unsigned int *code)
  *  (append 0 for positive level, 1 for negative level)
  */
 int
-mp1e_dct_coeff_vlc(int table, int run, int level, unsigned int *vlcp)
+dct_coeff_vlc(int table, int run, int level, unsigned int *vlcp)
 {
 	const struct dct_coeff *dcp;
 
 	for (dcp = table ? dct_coeff_one_vlc : dct_coeff_zero_vlc; dcp->run >= 0; dcp++)
 		if (dcp->run == run && dcp->level == level)
-			return mp1e_vlc(dcp->code, vlcp);
+			return vlc(dcp->code, vlcp);
 
 	return -1; // No vlc for this run/length combination
 }

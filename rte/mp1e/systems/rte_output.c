@@ -33,24 +33,34 @@
 #include "../common/fifo.h"
 #include "../common/log.h"
 #include "systems.h"
-#include "../rtepriv.h"
+#include "stream.h"
+#include "../../rtepriv.h"
 
-buffer *		(* mux_output)(struct multiplexer *mux,
-				       buffer *b);
+buffer2 *		(* mux_output)(buffer2 *b);
 
-static buffer		mux_buffer;
+static buffer2		mux_buffer;
 
-static buffer *
-output(struct multiplexer *mux,
-       buffer *mbuf)
+static buffer2 *
+output(buffer2 *mbuf)
 {
-	rte_context *context = (rte_context*)mux->user_data;
-
 	if (!mbuf)
 		return &mux_buffer;
 
-	if (mbuf->used && mbuf->data)
-		context->write(context, mbuf->data, mbuf->used);
+	/* rte_global_context sanity checks */
+	if ((!rte_global_context) || (!rte_global_context->private) ||
+	    (!rte_global_context->private->encode_callback)) {
+		rte_error(NULL, "sanity check failed");
+		return mbuf;
+	}
+
+	rte_global_context->private->bytes_out += mbuf->used;
+
+	rte_global_context->private->
+		encode_callback(rte_global_context,
+				mbuf->data,
+				mbuf->used,
+				rte_global_context->private->user_data);
+
 
 	return mbuf; /* any previously entered */
 }
@@ -58,7 +68,7 @@ output(struct multiplexer *mux,
 int
 output_init( void )
 {
-	if (!init_buffer(&mux_buffer, PACKET_SIZE))
+	if (!init_buffer2(&mux_buffer, PACKET_SIZE))
 		return FALSE;
 
 	mux_output = output;

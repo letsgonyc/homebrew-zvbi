@@ -1,11 +1,12 @@
 /*
  *  MPEG-1 Real Time Encoder
  *
- *  Copyright (C) 1999-2001 Michael H. Schimek
+ *  Copyright (C) 1999-2000 Michael H. Schimek
  *
  *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License version 2 as
- *  published by the Free Software Foundation.
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) version 2.
  *
  *  This program is distributed in the hope that it will be useful,
  *  but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -17,9 +18,7 @@
  *  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-/* $Id: options.h,v 1.6 2001-11-22 17:51:07 mschimek Exp $ */
-
-extern int		test_mode;
+/* $Id: options.h,v 1.1.1.1 2001-08-07 22:09:24 garetxe Exp $ */
 
 extern char *		cap_dev;
 extern char *		pcm_dev;
@@ -33,9 +32,9 @@ extern int		height;
 extern int		grab_width;
 extern int		grab_height;
 extern int		video_bit_rate;
-extern long long	video_num_frames;
+extern int		video_num_frames;
 extern char *		gop_sequence;
-// extern int		frames_per_seqhdr;
+extern int		frames_per_seqhdr;
 extern int		filter_mode;
 extern double		frame_rate;
 extern int		preview;
@@ -43,13 +42,13 @@ extern char *		anno;
 extern int		luma_only;
 extern int		motion_min;
 extern int		motion_max;
-extern int		skip_method;
+extern int		hack2;
 
 /* Audio */
 
 extern int		audio_bit_rate;
 extern int		audio_bit_rate_stereo;
-extern long long	audio_num_frames;
+extern int		audio_num_frames;
 extern int		sampling_rate;
 extern int		mix_line;
 extern int		mix_volume;

@@ -1,11 +1,12 @@
 /*
  *  MPEG-1 Real Time Encoder
  *
- *  Copyright (C) 1999-2001 Michael H. Schimek
+ *  Copyright (C) 1999-2000 Michael H. Schimek
  *
  *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License version 2 as
- *  published by the Free Software Foundation.
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) version 2.
  *
  *  This program is distributed in the hope that it will be useful,
  *  but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -17,7 +18,7 @@
  *  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-/* $Id: options.c,v 1.10 2001-12-07 06:50:24 mschimek Exp $ */
+/* $Id: options.c,v 1.1.1.1 2001-08-07 22:09:24 garetxe Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #  include <config.h>
@@ -48,14 +49,13 @@ static const char *mux_syn_options[] = { "nirvana", "bypass", "mpeg1", "mpeg2-ps
 static const char *audio_options[] = { "stereo", "", "dual_channel", "mono" };
 static const char *mute_options[] = { "unmute", "mute", "ignore" };
 static const char *cpu_options[] = { "", "pmmx", "p2", "p3", "p4", "k6-2", "k7", "m2", "c3" };
-static const char *skip_options[] = { "compatible", "mux", "fake_picture" };
 
 void
 usage(FILE *fi)
 {
 	fprintf(fi,
 		"Real time MPEG-1 encoder " VERSION "\n"
-		"Copyright (C) 1999-2001 Michael H. Schimek\n"
+		"Copyright (C) 1999-2000 Michael H. Schimek\n"
 		"\n"
 		"This is free software licensed without a fee under the terms of the\n"
 		"GNU General Public License Version 2. NO WARRANTIES.\n"
@@ -66,8 +66,12 @@ usage(FILE *fi)
 		" -X mux         Multiplexer to use                          auto\n"
 		"\n"
 		" -b bps         Output video bits per second                %5.3f Mbits/s\n"
-		" -c name        Video capture device (V4L2/V4L API)         %s\n"
-		" -F mode        Filter mode                                 auto\n"
+#ifdef V4L2_MAJOR_VERSION
+		" -c name        Video capture device (V4L2 API)             %s\n"
+		" -F mode        Filter mode                                 apropriate\n"
+#else
+		" -c name        Video capture device (V4L API)              %s\n"
+#endif
 		" -f frames      Frames per second                           maximum\n"
 		" -g string      Group of pictures sequence (display order)  %s\n"
 		" -l             Letterbox mode                              off\n"
@@ -77,8 +81,8 @@ usage(FILE *fi)
 		"                immediately hit Ctrl-\\                      years\n"
 		" -s wxh         Image size (centred)                        %d x %d pixels\n"
 		" -G wxh         Grab size, multiple of 16 x 16              %d x %d pixels\n"
-//		" -H frames      Repeat sequence header every n frames,\n"
-//		"                n > 0. Helps random access                  2 secs\n"
+		" -H frames      Repeat sequence header every n frames,\n"
+		"                n > 0. Helps random access                  2 secs\n"
 		" -R min,max     Motion compensation search range limits     %d,%d\n"
 #if TEST_PREVIEW && HAVE_LIBXV
 		" -P             XvImage Preview (test mode)                 disabled\n"
@@ -89,14 +93,16 @@ usage(FILE *fi)
 		"\n"
 		" -a mode        Audio mode 0 = stereo, 2 = dual channel,\n"
 		"                3 = mono                                    %s\n"
-		" -p name        PCM sampling device                         %s\n"
+		" -p name        PCM sampling device (OSS API)               %s\n"
 		" -B bps         Output audio bits per second                %d kbits/s\n"
 		" -S rate        Audio sampling rate                         %2.1f kHz\n"
 		"\n"
 		" -r line,vol    Audio record source 1..30%s,\n"
 		"                volume 0..100                               %d,%d\n"
 		" -x name        Audio mixer device (OSS API)                %s\n"
+#ifdef V4L2_MAJOR_VERSION
 		" -M mode        RF audio 0 = unmute, 1 = mute, 2 = ignore   %s\n"
+#endif
 		"\n"
 		" -i filename    Source configuration file\n"
 		" -v             Increase verbosity level, try -v, -vv\n"
@@ -106,7 +112,7 @@ usage(FILE *fi)
 		"the compressed stream will be sent to standard output. See the\n"
 		"mp1e manual page for details.\n",
 
-		program_invocation_name, mux_options[modules], (double) video_bit_rate / 1e6,
+		my_name, mux_options[modules], (double) video_bit_rate / 1e6,
 		cap_dev, gop_sequence, width, height, grab_width, grab_height,
 		motion_min, motion_max,
 
@@ -114,13 +120,16 @@ usage(FILE *fi)
 
 		audio_options[audio_mode], pcm_dev, audio_bit_rate / 1000, sampling_rate / 1e3,
 
-		mix_sources(), mix_line, mix_volume, mix_dev, mute_options[mute]
+		mix_sources(), mix_line, mix_volume, mix_dev
+#ifdef V4L2_MAJOR_VERSION
+		, mute_options[mute]
+#endif
 		);
 
 	exit((fi == stderr) ? EXIT_FAILURE : EXIT_SUCCESS);
 }
 
-#define OPT_STR "2a:b:c:e:f:g:hi:lm:n:p:r:s:t:vwx:A:C:B:F:G:H:I:M:PR:S:T:VX:"
+#define OPT_STR "2a:b:c:f:g:hi:lm:n:p:r:s:vwx:A:C:B:F:G:H:I:M:PR:S:T:VX:"
 
 static const struct option
 long_options[] = {
@@ -128,7 +137,6 @@ long_options[] = {
 	{ "audio_mode",			required_argument, NULL, 'a' },
 	{ "video_bit_rate",		required_argument, NULL, 'b' },
 	{ "capture_device",		required_argument, NULL, 'c' },
-	{ "skip_method",		required_argument, NULL, 'e' },
 	{ "frame_rate",			required_argument, NULL, 'f' },
 	{ "gop_sequence",		required_argument, NULL, 'g' },
 	{ "help",			no_argument,	   NULL, 'h' },
@@ -140,7 +148,6 @@ long_options[] = {
 	{ "pcm_device",			required_argument, NULL, 'p' },
 	{ "rec_source",			required_argument, NULL, 'r' },
 	{ "image_size",			required_argument, NULL, 's' },
-	{ "test",			required_argument, NULL, 't' },
 	{ "verbose",			optional_argument, NULL, 'v' },
 	{ "mono",			no_argument,	   NULL, 'w' },
 	{ "mixer_device",		required_argument, NULL, 'x' },
@@ -315,7 +322,7 @@ parse_option(int c)
 
 	switch (c) {
 		case '2':
-			skip_method = 1; /* compatibility */
+			hack2 = TRUE;
 			break;
 
 		case 'a':
@@ -352,11 +359,6 @@ parse_option(int c)
 
 		case 'c':
 			cap_dev = strdup(optarg);
-			break;
-
-		case 'e':
-			if ((skip_method = suboption(skip_options, 3, 0)) < 0)
-				return FALSE;
 			break;
 
 		case 'f':
@@ -422,17 +424,6 @@ parse_option(int c)
 				return FALSE;
 			break;
 
-		case 't':
-			/*
-			  1 - audio fft, filter and dct test
-			  2 - video
-			  8 - video frame dropping test (20%)
-			  16 - video effective bit rate
-			  32 - deliberate sampling rate mismatch
-			 */
-			test_mode = strtol(optarg, NULL, 0);
-			break;
-
 		case 'v':
 			if (optarg)
 				verbose = strtol(optarg, NULL, 0);
@@ -488,33 +479,10 @@ parse_option(int c)
 			break;
 
 	        case 'H':
+			frames_per_seqhdr = strtol(optarg, NULL, 0);
+			if (frames_per_seqhdr < 1)
+				return FALSE;
 			break;
-
-			/* 
-			   obsolete, ignored
-			   
-			   frames_per_seqhdr = strtol(optarg, NULL, 0);
-			   
-			   if (frames_per_seqhdr < 1)
-			           return FALSE;
-.BI "\-H, \-\-frames_per_seq_header " n
-.RS
-The sequence header in an MPEG-1 video stream contains information
-such as the picture size and rate, and is therefore essential for a
-player. For archiving it's sufficient to encode only one header.
-If you want to stream the file, the player may have missed the initial
-header. This option allows to repeat the header at certain regular
-intervals, the default is appx. two seconds. When you concatenate
-MPEG streams (simply with "cat") using different compression
-parameters, you may also want to repeat the header to ensure random
-access will pick up the correct parameters.
-.P
-Note whatever you specify the header is not inserted more often than
-once in each group of pictures (see above). A reasonable value may
-be 25 or 30, that is one header per second.
-.RE
-.TP
-			*/
 
 		case 'I':
 			vbi_dev = strdup(optarg);
@@ -605,7 +573,7 @@ bark(void)
 
 	if (gop_sequence[0] != 'I' ||
 	    strspn(gop_sequence, "IPB") != strlen(gop_sequence) ||
-	    strlen(gop_sequence) > 1023) /* XXX 0P can increase the size */
+	    strlen(gop_sequence) > 1023)
 		FAIL("Invalid group of pictures sequence: \"%s\".\n"
 		     "A valid sequence can consist of the picture types 'I' (intra coded),\n"
 		     "'P' (forward predicted), and 'B' (bidirectionally predicted) in any\n"
@@ -640,23 +608,8 @@ options(int ac, char **av)
 
 	bark();
 
-	if (!isatty(STDIN_FILENO)) {
-		/* HvdH: ugly hack; check to see if the capture device is 'raw:'
-		   in that case, stdin if for raw YUV data, not options.
-		   cleaner solution is to reverse order; command line first,
-		   then stdin options. It makes sense to have stdin override
-		   command line options, but it might break stuff, so I won't 
-		   change the order */ 
-		for (c = 0; c < ac; c++) {
-			/* FIXME: very rough check for capture device */
-			if (strstr(av[c], "raw:")) {
-				c = -1;
-				break;
-			}
-		}
-		if (c >= 0)
-			options_from_file("stdin", FALSE);
-	}
+	if (!isatty(STDIN_FILENO))
+		options_from_file("stdin", FALSE);
 
 	while ((c = getopt_long(ac, av, OPT_STR, long_options, &index)) != -1)
 		if (!parse_option(c))

@@ -5,8 +5,9 @@
  *  Copyright (C) 1999-2000 Michael H. Schimek
  *
  *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License version 2 as
- *  published by the Free Software Foundation.
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
  *
  *  This program is distributed in the hope that it will be useful,
  *  but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -18,11 +19,11 @@
  *  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-/* $Id: mpeg.h,v 1.4 2001-09-20 23:35:07 mschimek Exp $ */
+/* $Id: mpeg.h,v 1.1.1.1 2001-08-07 22:09:48 garetxe Exp $ */
 
-#define MPEG_VERSION_1           	3 /* ISO/IEC 11172-3 */
-#define MPEG_VERSION_2			2 /* ISO/IEC 13818-3 */
-#define MPEG_VERSION_2_5		0 /* Fraunhofer extension, not supported */
+#define MPEG_VERSION_1           	3 // ISO/IEC 11172-3
+#define MPEG_VERSION_2			2 // ISO/IEC 13818-3
+#define MPEG_VERSION_2_5		0 // not supported
 #define MPEG_VERSIONS			4
 
 #define LAYER_II			2
@@ -44,8 +45,8 @@
 #define HEADER_BITS			32
 
 struct absthr_rec {
-	int			line;	/* fft higher line */
-	float			thr;	/* absolute threshold (dB) */
+	int			line;	// fft higher line
+	float			thr;	// absolute threshold (dB)
 };
 
 extern const int		bit_rate_value[MPEG_VERSIONS][16];

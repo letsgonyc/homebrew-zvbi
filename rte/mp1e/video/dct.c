@@ -4,8 +4,9 @@
  *  Copyright (C) 1999-2000 Michael H. Schimek
  *
  *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License version 2 as
- *  published by the Free Software Foundation.
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) version 2.
  *
  *  This program is distributed in the hope that it will be useful,
  *  but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -17,7 +18,7 @@
  *  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-/* $Id: dct.c,v 1.3 2001-10-07 10:55:51 mschimek Exp $ */
+/* $Id: dct.c,v 1.1.1.1 2001-08-07 22:09:53 garetxe Exp $ */
 
 #include <assert.h>
 #include "../common/math.h"
@@ -27,8 +28,8 @@
 #include "mpeg.h"
 #include "video.h"
 
-// static char sh1[8] = { 15, 14, 13, 13, 12, 12, 12, 11 };
-// static char sh2[8] = { 16, 14, 13, 13, 13, 12, 12, 12 };
+char sh1[8] = { 15, 14, 13, 13, 12, 12, 12, 11 };
+char sh2[8] = { 16, 14, 13, 13, 13, 12, 12, 12 };
 
 /*
  *  ((q > 16) ? q & ~1 : q) == ((ltp[q] * 2 + 1) << lts[q])
@@ -71,19 +72,21 @@ mmx_t c256 align(8);
 mmx_t mm8, mm9;
 mmx_t c2q align(8);
 
-char	mmx_q_fdct_intra_sh[32]		align(MIN(CACHE_LINE,32));
-short	mmx_q_fdct_intra_q_lut[8][8][8]	align(CACHE_LINE);
-short	mmx_q_fdct_inter_lut[6][8][2]	align(CACHE_LINE);
-short	mmx_q_fdct_inter_lut0[8][1]	align(CACHE_LINE);
-short	mmx_q_fdct_inter_q[32]		align(CACHE_LINE);
-mmx_t	mmx_q_idct_inter_tab[16]	align(CACHE_LINE);
-short	mmx_q_idct_intra_q_lut[8][8][8]	align(CACHE_LINE);
+char			mmx_q_fdct_intra_sh[32]			align(MIN(CACHE_LINE,32));
+short			mmx_q_fdct_intra_q_lut[8][8][8]		align(CACHE_LINE);
+short			mmx_q_fdct_inter_lut[6][8][2]		align(CACHE_LINE);
+short			mmx_q_fdct_inter_lut0[8][1]		align(CACHE_LINE);
+short			mmx_q_fdct_inter_q[32]			align(CACHE_LINE);
+mmx_t			mmx_q_idct_inter_tab[16]		align(CACHE_LINE);
+short			mmx_q_idct_intra_q_lut[8][8][8]		align(CACHE_LINE);
 
-mmx_t cfae;	// fdct_inter temp
-mmx_t csh;	// "
-mmx_t crnd;	// "
-mmx_t c1x;	// idct_intra2 temp
-mmx_t shift, mask, mask0; // "
+mmx_t cfae;
+mmx_t csh;
+mmx_t crnd;
+mmx_t c3a, c5a;
+mmx_t c5b;
+mmx_t c1x;
+mmx_t shift, mask, mask0;
 
 #define R2 sqrt(2.0)
 
@@ -124,9 +127,9 @@ init_dct(void)
 	cC2626_15	= MMXW(lroundn(C2 * S15), -lroundn(C6 * S15), lroundn(C2 * S15), -lroundn(C6 * S15));
 	cC6262_15	= MMXW(lroundn(C6 * S15), +lroundn(C2 * S15), lroundn(C6 * S15), +lroundn(C2 * S15));
 
-//	c3a = MMXRW(0);
-//	c5a = MMXRW(128 * 32 + 16);
-//	c5b = MMXRW(16);
+	c3a = MMXRW(0);
+	c5a = MMXRW(128 * 32 + 16);
+	c5b = MMXRW(16);
 
 	c2q.uq = 2ULL;
 

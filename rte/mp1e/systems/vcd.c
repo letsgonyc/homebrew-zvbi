@@ -4,8 +4,9 @@
  *  Copyright (C) 1999-2001 Michael H. Schimek
  *
  *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License version 2 as
- *  published by the Free Software Foundation.
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
  *
  *  This program is distributed in the hope that it will be useful,
  *  but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -17,7 +18,7 @@
  *  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-/* $Id: vcd.c,v 1.7 2001-11-28 22:13:24 mschimek Exp $ */
+/* $Id: vcd.c,v 1.1.1.1 2001-08-07 22:10:16 garetxe Exp $ */
 
 /*
  *  This code creates a stream suitable for mkvcdfs as vcdmplex
@@ -47,6 +48,7 @@
 #include "../options.h"
 #include "mpeg.h"
 #include "systems.h"
+#include "stream.h"
 
 #define put(p, val, bytes)						\
 do {									\
@@ -162,12 +164,11 @@ padding_packet(unsigned char *p, int size)
 }
 
 static inline bool
-next_access_unit(stream *str, double *ppts, unsigned char **pph)
+next_access_unit(stream *str, double *ppts, unsigned char *ph)
 {
-	buffer *buf;
-	unsigned char *ph;
+	buffer2 *buf;
 
-	str->buf = buf = wait_full_buffer(&str->cons);
+	str->buf = buf = wait_full_buffer2(&str->cons);
 
 	str->ptr  = buf->data;
 	str->left = buf->used;
@@ -177,7 +178,7 @@ next_access_unit(stream *str, double *ppts, unsigned char **pph)
 		return FALSE;
 	}
 
-	if ((ph = *pph)) {
+	if (ph) {
 		/*
 		 *  Add DTS/PTS of first access unit
 		 *  commencing in packet.
@@ -192,18 +193,16 @@ next_access_unit(stream *str, double *ppts, unsigned char **pph)
 			switch (buf->type) {
 			case I_TYPE:
 			case P_TYPE:
-				*ppts = str->dts + str->ticks_per_frame * (buf->offset + 1);
+				*ppts = str->dts + str->ticks_per_frame * buf->offset; // reorder delay
 				put(ph + 6, (0x1 << 14) + (1 << 13) + (47104 >> 10), 2);
 				time_stamp(ph +  8, MARKER_PTS, *ppts);
 				time_stamp(ph + 13, MARKER_DTS, str->dts);
-				*pph = NULL;
 				break;
 
 			case B_TYPE:
-				*ppts = str->dts;
+				*ppts = str->dts; // delay always 0
 				time_stamp(ph +  8, MARKER_PTS, *ppts);
 				time_stamp(ph + 13, MARKER_DTS, str->dts);
-				*pph = NULL;
 				break;
 
 			default:
@@ -213,7 +212,6 @@ next_access_unit(stream *str, double *ppts, unsigned char **pph)
 			*ppts = str->dts + str->pts_offset;
 			put(ph + 6, (0x1 << 14) + (0 << 13) + (4096 >> 7), 2);
 			time_stamp(ph + 8, MARKER_PTS_ONLY, *ppts);
-			*pph = NULL;
 		}
 	}
 
@@ -225,14 +223,14 @@ next_access_unit(stream *str, double *ppts, unsigned char **pph)
 #define LARGE_DTS 1E30
 
 static inline stream *
-schedule(multiplexer *mux)
+schedule(void)
 {
 	double dtsi_min = LARGE_DTS;
 	stream *s, *str;
 
 	str = NULL;
 
-	for_all_nodes (s, &mux->streams, fifo.node) {
+	for_all_nodes (s, &mux_input_streams, fifo.node) {
 		double dtsi = s->dts;
 
 		if (s->buf)
@@ -248,12 +246,12 @@ schedule(multiplexer *mux)
 }
 
 void *
-vcd_system_mux(void *muxp)
+vcd_system_mux(void *unused)
 {
-	multiplexer *mux = muxp;
 	unsigned char *p, *ph, *ps, *pl, *px;
 	unsigned long bytes_out = 0;
 	unsigned int packet_count;
+	unsigned int packet_size;
 	double system_rate, system_rate_bound;
 	double system_overhead;
 	double ticks_per_pack, tscr;
@@ -261,10 +259,7 @@ vcd_system_mux(void *muxp)
 	stream *str, *video_stream = NULL;
 	stream *audio_stream = NULL;
 	bool do_pad = TRUE;
-	buffer *buf;
-
-	pthread_cleanup_push((void (*)(void *)) pthread_rwlock_unlock, (void *) &mux->streams.rwlock);
-	assert(pthread_rwlock_rdlock(&mux->streams.rwlock) == 0);
+	buffer2 *buf;
 
 	{
 		double preload_delay;
@@ -273,7 +268,7 @@ vcd_system_mux(void *muxp)
 		int preload = 0;
 		int bit_rate = 0;
 
-		for_all_nodes (str, &mux->streams, fifo.node) {
+		for_all_nodes (str, &mux_input_streams, fifo.node) {
 			str->buf = NULL;
 			bit_rate += str->bit_rate;
 			str->eff_bit_rate = str->bit_rate;
@@ -290,14 +285,14 @@ vcd_system_mux(void *muxp)
 					do_pad = FALSE;
 			}
 
-			buf = wait_full_buffer(&str->cons);
+			buf = wait_full_buffer2(&str->cons);
 
 			if (buf->used <= 0) /* XXX */
 				FAIL("Premature end of file / error");
 
 	    		preload += buf->used;
 
-			unget_full_buffer(&str->cons, buf);
+			unget_full_buffer2(&str->cons, buf);
 
 			nstreams++;
 		}
@@ -305,12 +300,14 @@ vcd_system_mux(void *muxp)
 		if (!video_stream || !audio_stream || nstreams != 2)
 			FAIL("One video, one audio stream required");
 
-		buf = mux_output(mux, NULL);
+		buf = mux_output(NULL);
 
 		assert(buf && buf->size >= 512
 		           && buf->size <= 32768);
 
-		system_overhead = mux->packet_size / (mux->packet_size - SYSTEM_HEADER_SIZE - PACK_HEADER_SIZE);
+		packet_size = buf->size;
+
+		system_overhead = packet_size / (packet_size - SYSTEM_HEADER_SIZE - PACK_HEADER_SIZE);
 		system_rate = system_rate_bound = bit_rate * system_overhead / 8;
 
 		/* Frames must arrive completely before decoding starts */
@@ -318,9 +315,9 @@ vcd_system_mux(void *muxp)
 			/ system_rate_bound * SYSTEM_TICKS;
 
 		scr = 36000;
-		ticks_per_pack = mux->packet_size / system_rate_bound * SYSTEM_TICKS;
+		ticks_per_pack = packet_size / system_rate_bound * SYSTEM_TICKS;
 
-		for_all_nodes (str, &mux->streams, fifo.node) {
+		for_all_nodes (str, &mux_input_streams, fifo.node) {
 			/* Video PTS is delayed by one frame */
 			if (!IS_VIDEO_STREAM(str->stream_id)) {
 				str->pts_offset = (double) SYSTEM_TICKS / (video_frame_rate * 1.0);
@@ -341,7 +338,7 @@ vcd_system_mux(void *muxp)
 		p = padding_packet(p, buf->data + buf->size - p);
 
 	bytes_out += buf->used = p - buf->data;
-	buf = mux_output(mux, buf);
+	buf = mux_output(buf);
 
 	scr += ticks_per_pack;
 
@@ -353,7 +350,7 @@ vcd_system_mux(void *muxp)
 		p = padding_packet(p, buf->data + buf->size - p);
 
 	bytes_out += buf->used = p - buf->data;
-	buf = mux_output(mux, buf);
+	buf = mux_output(buf);
 
 	tscr = scr;
 
@@ -372,7 +369,7 @@ vcd_system_mux(void *muxp)
 
 		/* XXX target system rate 75 * 2324 B/s */
 reschedule:
-		if (!(str = schedule(mux)))
+		if (!(str = schedule()))
 			break;
 
 		pts = -1;
@@ -401,7 +398,7 @@ reschedule:
 			str->left -= m;
 
 			if (!str->left) {
-				send_empty_buffer(&str->cons, str->buf);
+				send_empty_buffer2(&str->cons, str->buf);
 
 				str->buf = NULL;
 				str->dts += str->ticks_per_frame;
@@ -412,7 +409,7 @@ reschedule:
 
 			while (p < px) {
 				if (str->left <= 0) {
-					if (!next_access_unit(str, &pts, &ph)) {
+					if (!next_access_unit(str, &pts, ph)) {
 						str->dts = LARGE_DTS * 2.0; // don't schedule stream
 
 						if (pl == p) {
@@ -428,6 +425,8 @@ reschedule:
 
 						break;
 					}
+
+					ph = NULL;
 				}
 
 				n = MIN(str->left, px - p);
@@ -437,7 +436,7 @@ reschedule:
 				str->left -= n;
 
 				if (!str->left) {
-					send_empty_buffer(&str->cons, str->buf);
+					send_empty_buffer2(&str->cons, str->buf);
 
 					str->buf = NULL;
 					str->dts += str->ticks_per_frame;
@@ -456,7 +455,7 @@ reschedule:
 
 		bytes_out += buf->used = p - buf->data;
 
-		buf = mux_output(mux, buf);
+		buf = mux_output(buf);
 
 		assert(buf && buf->size >= 512
 			   && buf->size <= 32768);
@@ -492,9 +491,7 @@ reschedule:
 	*((unsigned int *) p) = swab32(ISO_END_CODE);
 	buf->used = 4;
 
-	mux_output(mux, buf);
-
-	pthread_cleanup_pop(1);
+	mux_output(buf);
 
 	return NULL;
 }

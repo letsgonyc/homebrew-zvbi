@@ -4,8 +4,9 @@
  *  Copyright (C) 2000 Michael H. Schimek
  *
  *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License version 2 as
- *  published by the Free Software Foundation.
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) version 2.
  *
  *  This program is distributed in the hope that it will be useful,
  *  but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -17,11 +18,7 @@
  *  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-/* $Id: global_data.c,v 1.10 2001-11-22 17:51:07 mschimek Exp $ */
-
-#ifdef HAVE_CONFIG_H
-#  include <config.h>
-#endif
+/* $Id: global_data.c,v 1.1.1.1 2001-08-07 22:09:25 garetxe Exp $ */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -44,24 +41,18 @@
 /*
  *  Factory defaults, use system wide configuration file to customize
  */
-int			test_mode		= 0;
 
 int			modules			= 3;			// 1 = Video, 2 = Audio, 4 = VBI
 int			mux_syn			= 2;			// 0 = null, elementary, MPEG-1, MPEG-2 PS 
 
 char *			cap_dev			= "/dev/video";
-
-#if defined(HAVE_LIBASOUND)
-/* alsa 0.5: card #0, device #0; 0.9: "default" */
-char *			pcm_dev			= "alsa";
-#elif defined(HAVE_OSS)
-char *			pcm_dev			= "/dev/dsp";
+#ifdef HAVE_LIBASOUND
+char *			pcm_dev			= "alsa-0,0";
 #elif defined(USE_ESD)
 char *			pcm_dev			= "esd";
 #else
-char *			pcm_dev			= "";
+char *			pcm_dev			= "/dev/dsp";
 #endif
-
 char *			mix_dev			= "/dev/mixer";
 char *			vbi_dev			= "/dev/vbi";
 
@@ -71,21 +62,22 @@ int			grab_width		= 352;
 int			grab_height		= 288;
 // defaults to width/height if given
 int			video_bit_rate		= 2300000;
-long long		video_num_frames	= INT_MAX; /* XXX rounding */
+int			video_num_frames	= INT_MAX;
 char *			gop_sequence		= "IBBPBBPBBPBB";
-// int			frames_per_seqhdr	= 50;
-int			filter_mode		= CM_YUYV_VERTICAL_DECIMATION;
+int			frames_per_seqhdr	= 50;
+int			filter_mode		= CM_YUYV_VERTICAL_DECIMATION; // CM_YUV
+// defaults to _VERT_INTERP in motion mode
 double			frame_rate		= 1000.0;
 int			preview			= 0;			// 0 = none, XvImage/GTK, progressive
 char *			anno			= NULL;
 int			luma_only		= 0;			// boolean
 int			motion_min		= 0;
 int			motion_max		= 0;
-int			skip_method		= 0;			// compatible
+int			hack2			= 0;
 
 int			audio_bit_rate		= 80000;
 int			audio_bit_rate_stereo	= 160000;
-long long		audio_num_frames	= INT_MAX;
+int			audio_num_frames	= INT_MAX;
 int			sampling_rate		= 44100;
 int			mix_line		= SOUND_MIXER_LINE;	// soundcard.h
 int			mix_volume		= 80;			// 0 <= n <= 100

@@ -4,8 +4,9 @@
  *  Copyright (C) 1999-2000 Michael H. Schimek
  *
  *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License version 2 as
- *  published by the Free Software Foundation.
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) version 2.
  *
  *  This program is distributed in the hope that it will be useful,
  *  but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -17,23 +18,19 @@
  *  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-/* $Id: dct.h,v 1.3 2001-10-07 10:55:51 mschimek Exp $ */
+/* $Id: dct.h,v 1.1.1.1 2001-08-07 22:09:53 garetxe Exp $ */
 
 #define reg(n) __attribute__ ((regparm (n)))
 
-extern void		mp1e_fdct_intra(int quant_scale) reg(1);
-extern unsigned int	mp1e_fdct_inter(short iblock[6][8][8],
-					     int quant_scale) reg(2);
-extern void		mp1e_mpeg1_idct_intra(int quant_scale) reg(1);
-extern void		mp1e_mpeg1_idct_inter(int quant_scale,
-					      unsigned int cbp) reg(2);
+extern void		fdct_intra(int quant_scale) reg(1);
+extern unsigned int	fdct_inter(short iblock[6][8][8], int quant_scale) reg(2);
+extern void		mpeg1_idct_intra(int quant_scale) reg(1);
+extern void		mpeg1_idct_inter(int quant_scale, unsigned int cbp) reg(2);
 
-extern void		mp1e_mmx_fdct_intra(int quant_scale) reg(1);
-extern unsigned int	mp1e_mmx_fdct_inter(short iblock[6][8][8],
-						 int quant_scale) reg(2);
-extern void		mp1e_mmx_mpeg1_idct_intra(int quant_scale) reg(1);
-extern void		mp1e_mmx_mpeg1_idct_intra2(int quant_scale) reg(1);
-extern void		mp1e_mmx_mpeg1_idct_inter(int quant_scale,
-						  unsigned int cbp) reg(2);
+extern void		mmx_fdct_intra(int quant_scale) reg(1);
+extern unsigned int	mmx_fdct_inter(short iblock[6][8][8], int quant_scale) reg(2);
+extern void		mmx_mpeg1_idct_intra(int quant_scale) reg(1);
+extern void		mmx_mpeg1_idct_intra2(int quant_scale) reg(1);
+extern void		mmx_mpeg1_idct_inter(int quant_scale, unsigned int cbp) reg(2);
 
-extern void		mp1e_mmx_copy_refblock(void);
+extern void		mmx_copy_refblock(void);

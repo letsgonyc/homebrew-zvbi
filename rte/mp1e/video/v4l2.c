@@ -1,11 +1,12 @@
 /*
  *  MPEG-1 Real Time Encoder
  *
- *  Copyright (C) 1999-2001 Michael H. Schimek
+ *  Copyright (C) 1999-2000 Michael H. Schimek
  *
  *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License version 2 as
- *  published by the Free Software Foundation.
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) version 2.
  *
  *  This program is distributed in the hope that it will be useful,
  *  but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -17,7 +18,7 @@
  *  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-/* $Id: v4l2.c,v 1.9 2001-11-22 17:51:07 mschimek Exp $ */
+/* $Id: v4l2.c,v 1.1.1.1 2001-08-07 22:10:11 garetxe Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #  include <config.h>
@@ -45,9 +46,9 @@
 #ifdef V4L2_MAJOR_VERSION
 
 static int			fd;
-static fifo			cap_fifo;
+static fifo2			cap_fifo;
 static producer			cap_prod;
-static buffer *		        buffers;
+static buffer2 *		buffers;
 
 static struct v4l2_capability	vcap;
 static struct v4l2_standard	vstd;
@@ -57,9 +58,6 @@ static struct v4l2_requestbuffers vrbuf;
 
 static struct v4l2_control	old_mute;
 
-static double			cap_time;
-static double			frame_period_near;
-static double			frame_period_far;
 
 #define VIDIOC_PSB _IOW('v', 193, int)
 
@@ -79,30 +77,8 @@ le4cc2str(int n)
 	return buf;
 }
 
-static inline void
-timestamp(buffer *b)
-{
-	double now = current_time();
-
-	if (cap_time > 0) {
-		double dt = now - cap_time;
-		double ddt = frame_period_far - dt;
-
-		if (frame_period_near < frame_period_far * 1.5) {
-			frame_period_near = (frame_period_near - dt) * 0.8 + dt;
-			frame_period_far = ddt * 0.9999 + dt;
-			b->time = cap_time += frame_period_far;
-		} else {
-			frame_period_near = frame_period_far;
-			b->time = cap_time = now;
-		}
-	} else {
-		b->time = cap_time = now;
-	}
-}
-
 static bool
-capture_on(fifo *unused)
+capture_on(fifo2 *unused)
 {
 	int str_type = V4L2_BUF_TYPE_CAPTURE;
 
@@ -110,18 +86,15 @@ capture_on(fifo *unused)
 }
 
 static void
-wait_full(fifo *f)
+wait_full(fifo2 *f)
 {
 	struct v4l2_buffer vbuf;
 	struct timeval tv;
 	fd_set fds;
-	buffer *b;
+	buffer2 *b;
 	int r = -1;
 
-#if 0
-drop:
-#endif
-	for (r = -1; r <= 0;) {
+	while (r <= 0) {
 		FD_ZERO(&fds);
 		FD_SET(fd, &fds);
 
@@ -146,30 +119,23 @@ drop:
 
 	b = buffers + vbuf.index;
 
-#if 0
-	if (1 && (rand() % 100) > 95) {
-		fprintf(stderr, "drop\n");
-		goto drop;
-	}
-
-	timestamp(b);
-#elif 1
+#if 1
 	b->time = vbuf.timestamp * (1 / 1e9); // UST, currently TOD
 #else
 	b->time = current_time();
 #endif
-	send_full_buffer(&cap_prod, b);
+	send_full_buffer2(&cap_prod, b);
 }
 
 /* Attention buffers are returned out of order */
 
 static void
-send_empty(consumer *c, buffer *b)
+send_empty(consumer *c, buffer2 *b)
 {
 	struct v4l2_buffer vbuf;
 
 	// XXX
-	unlink_node(&c->fifo->full, &b->node);
+	rem_node3(&c->fifo->full, &b->node);
 
 	vbuf.type = V4L2_BUF_TYPE_CAPTURE;
 	vbuf.index = b - buffers;
@@ -190,8 +156,8 @@ mute_restore(void)
 #define PROGRESSIVE(mode) (mode == CM_YUYV_PROGRESSIVE || \
 			   mode == CM_YUYV_PROGRESSIVE_TEMPORAL)
 
-fifo *
-v4l2_init(double *frame_rate)
+fifo2 *
+v4l2_init(void)
 {
 	int aligned_width;
 	int aligned_height;
@@ -200,8 +166,7 @@ v4l2_init(double *frame_rate)
 	int min_cap_buffers = video_look_ahead(gop_sequence);
 	int i;
 
-	ASSERT("open video capture device",
-	       (fd = open(cap_dev, O_RDWR)) != -1);
+	ASSERT("open video capture device", (fd = open(cap_dev, O_RDONLY)) != -1);
 
 	if (IOCTL(fd, VIDIOC_QUERYCAP, &vcap) == -1) {
 		close(fd);
@@ -216,7 +181,7 @@ v4l2_init(double *frame_rate)
 	    !(vcap.flags & V4L2_FLAG_SELECT))
 		FAIL("%s ('%s') does not support streaming/select(2),\n"
 			"%s will not work with the v4l2 read(2) interface.",
-			cap_dev, vcap.name, program_invocation_short_name);
+			cap_dev, vcap.name, my_name);
 
 	printv(2, "Opened %s ('%s')\n", cap_dev, vcap.name);
 
@@ -224,25 +189,21 @@ v4l2_init(double *frame_rate)
 	ASSERT("query current video standard",
 		IOCTL(fd, VIDIOC_G_STD, &vstd) == 0);
 
-	*frame_rate = (double) vstd.framerate.denominator /
-				vstd.framerate.numerator;
-	frame_period_near =
-	frame_period_far = 1.0 / *frame_rate;
-	cap_time = 0.0;
+	frame_rate_code = ((double) vstd.framerate.denominator /
+				    vstd.framerate.numerator < 29.0) ? 3 : 4;
 
-	if (*frame_rate > 29.0 && grab_height == 288)
-		grab_height = 240;
-	if (*frame_rate > 29.0 && grab_height == 576)
-		grab_height = 480;
+	if (frame_rate_code == 4 && grab_height == 288)
+		grab_height = 240; // XXX DAU
+	if (frame_rate_code == 4 && grab_height == 576)
+		grab_height = 480; // XXX DAU
 
 	if (PROGRESSIVE(filter_mode)) {
-		FAIL("Sorry, progressive mode out of order\n");
-//		vseg.frame_rate_code += 3; // see frame_rate_value[]
+		frame_rate_code += 3; // see frame_rate_value[]
 		min_cap_buffers++;
 	}
 
-	printv(2, "Video standard is '%s' (%5.2f Hz)\n",
-		vstd.name, *frame_rate);
+	printv(2, "Video standard is '%s'\n", vstd.name);
+
 
 	if (mute != 2) {
 		old_mute.id = V4L2_CID_AUDIO_MUTE;
@@ -279,7 +240,7 @@ v4l2_init(double *frame_rate)
 	aligned_width  = (grab_width + 15) & -16;
 
 	for (;;) {
-		int new_mode, new_height;
+		int new_mode;
 
 		probed_modes |= 1 << filter_mode;
 
@@ -308,13 +269,11 @@ v4l2_init(double *frame_rate)
 				break;
 		}
 
-		new_height = aligned_height;
-
 		if (filter_mode == CM_YUYV)
 			new_mode = CM_YUV;
 		else if (filter_mode == CM_YUYV_VERTICAL_DECIMATION) {
 			new_mode = CM_YUYV_VERTICAL_INTERPOLATION;
-			new_height = (grab_height + 15) & -16;
+			aligned_height = (grab_height + 15) & -16;
 		} else
 			new_mode = CM_YUYV;
 
@@ -329,7 +288,6 @@ v4l2_init(double *frame_rate)
 			filter_labels[new_mode]);
 
 		filter_mode = new_mode;
-		aligned_height = new_height;
 	}
 
 	mod = DECIMATING(filter_mode) ? 32 : 16;
@@ -406,9 +364,9 @@ v4l2_init(double *frame_rate)
 	printv(2, "%d capture buffers granted\n", vrbuf.count);
 
 	ASSERT("allocate capture buffers",
-		(buffers = calloc(vrbuf.count, sizeof(buffer))));
+		(buffers = calloc(vrbuf.count, sizeof(buffer2))));
 
-	init_callback_fifo(&cap_fifo, "video-v4l2",
+	init_callback_fifo2(&cap_fifo, "video-v4l2",
 		NULL, NULL, wait_full, send_empty, 0, 0);
 
 	ASSERT("init capture producer",
@@ -429,8 +387,7 @@ v4l2_init(double *frame_rate)
 		ASSERT("query capture buffer #%d",
 			IOCTL(fd, VIDIOC_QUERYBUF, &vbuf) == 0, i);
 
-		p = mmap(NULL, vbuf.length, PROT_READ | PROT_WRITE,
-			 MAP_SHARED, fd, vbuf.offset);
+		p = mmap(NULL, vbuf.length, PROT_READ, MAP_SHARED, fd, vbuf.offset);
 
 		if ((int) p == -1) {
 			if (errno == ENOMEM && i > 0)

@@ -1,11 +1,12 @@
 /*
  *  MPEG-1 Real Time Encoder
  *
- *  Copyright (C) 1999-2001 Michael H. Schimek
+ *  Copyright (C) 1999-2000 Michael H. Schimek
  *
  *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License version 2 as
- *  published by the Free Software Foundation.
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) version 2.
  *
  *  This program is distributed in the hope that it will be useful,
  *  but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -17,7 +18,7 @@
  *  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-/* $Id: file.c,v 1.6 2001-10-16 11:18:17 mschimek Exp $ */
+/* $Id: file.c,v 1.1.1.1 2001-08-07 22:10:00 garetxe Exp $ */
 
 #include <ctype.h>
 #include <assert.h>
@@ -31,7 +32,7 @@
 
 enum { FREE = 0, BUSY };
 
-static fifo			cap_fifo;
+static fifo2			cap_fifo;
 static producer			cap_prod;
 
 static int			buffer_size;
@@ -109,8 +110,7 @@ ppm_read(unsigned char *d1, char *name_template, int count)
 	ASSERT("read image file '%s'", !ferror(fi), name);
 
 	if (n != 2 || buf[0] != 'P' || buf[1] != '6') {
-		fprintf(stderr, "%s: '%s' is not a raw .ppm file\n",
-			program_invocation_short_name, name);
+		fprintf(stderr, "%s: '%s' is not a raw .ppm file\n", my_name, name);
 		return 0;
 	}
 
@@ -119,8 +119,7 @@ ppm_read(unsigned char *d1, char *name_template, int count)
 	ASSERT("read image file", ppm_getint(fi, &maxcol));
 
 	if (w <= 0 || h <= 0) {
-		fprintf(stderr, "%s: '%s' is corrupted\n",
-			program_invocation_short_name, name);
+		fprintf(stderr, "%s: '%s' is corrupted\n", my_name, name);
 		return 0;
 	}
 
@@ -213,13 +212,13 @@ ppm_read(unsigned char *d1, char *name_template, int count)
 }
 
 static void
-wait_full(fifo *f)
+wait_full(fifo2 *f)
 {
 	static double time = 0.0;
 	static int count = 0;
-	buffer *b;
+	buffer2 *b;
 
-	b = wait_empty_buffer(&cap_prod);
+	b = wait_empty_buffer2(&cap_prod);
 
 	b->time = time;
 
@@ -229,12 +228,12 @@ wait_full(fifo *f)
 
 	case -1:
 		b->used = 0; /* EOF */
-		send_full_buffer(&cap_prod, b);
+		send_full_buffer2(&cap_prod, b);
 		return;
 
 	default:
 		b->used = buffer_size;
-		send_full_buffer(&cap_prod, b);
+		send_full_buffer2(&cap_prod, b);
 		break;
 	}
 
@@ -243,8 +242,8 @@ wait_full(fifo *f)
 	count++;
 }
 
-fifo *
-file_init(double *frame_rate)
+fifo2 *
+file_init(void)
 {
 	int len = strlen(cap_dev);
 	int aligned_width;
@@ -281,12 +280,11 @@ file_init(double *frame_rate)
 			filter_labels[filter_mode]);
 	}
 
-	*frame_rate = 24.0;
-	//vseg.frame_rate_code = 3; // 24 Hz
+	frame_rate_code = 3; // 24 Hz
 
 	filter_init(pitch);
 
-	ASSERT("init capture fifo", init_callback_fifo(
+	ASSERT("init capture fifo", init_callback_fifo2(
 		&cap_fifo, "video-ppm",
 		NULL, NULL, wait_full, NULL,
 		video_look_ahead(gop_sequence), buffer_size));

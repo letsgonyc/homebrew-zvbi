@@ -4,8 +4,9 @@
  *  Copyright (C) 1999-2000 Michael H. Schimek
  *
  *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License version 2 as
- *  published by the Free Software Foundation.
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) version 2.
  *
  *  This program is distributed in the hope that it will be useful,
  *  but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -17,10 +18,7 @@
  *  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-/* $Id: mpeg.h,v 1.4 2001-10-07 10:55:51 mschimek Exp $ */
-
-#ifndef MPEG_H
-#define MPEG_H
+/* $Id: mpeg.h,v 1.1.1.1 2001-08-07 22:10:09 garetxe Exp $ */
 
 #define PICTURE_START_CODE		0x00000100L
 #define SLICE_START_CODE		0x00000101L
@@ -70,7 +68,5 @@ extern const unsigned long long motion_code_vlc[17];
 extern const unsigned long long dct_dc_size_luma_vlc[12];
 extern const unsigned long long dct_dc_size_chroma_vlc[12];
 
-extern int mp1e_vlc(unsigned long long, unsigned int *);
-extern int mp1e_dct_coeff_vlc(int table, int run, int level, unsigned int *);
-
-#endif /* MPEG_H */
+extern int vlc(unsigned long long, unsigned int *);
+extern int dct_coeff_vlc(int table, int run, int level, unsigned int *);

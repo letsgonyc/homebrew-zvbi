@@ -4,8 +4,9 @@
  *  Copyright (C) 1999-2001 Michael H. Schimek
  *
  *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License version 2 as
- *  published by the Free Software Foundation.
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) version 2.
  *
  *  This program is distributed in the hope that it will be useful,
  *  but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -17,7 +18,7 @@
  *  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-/* $Id: vbi.c,v 1.8 2001-10-08 05:49:44 mschimek Exp $ */
+/* $Id: vbi.c,v 1.1.1.1 2001-08-07 22:09:25 garetxe Exp $ */
 
 #include "site_def.h"
 
@@ -26,7 +27,7 @@
 #include "../systems/systems.h"
 #include "../common/alloc.h"
 #include "../common/log.h"
-#include "../common/sync.h"
+#include "../common/remote.h"
 #include "../options.h"
 #include "vbi.h"
 #include "tables.h"
@@ -38,10 +39,10 @@
 #endif
 
 static bool		do_pdc, do_subtitles;
-static fifo *		vbi_output_fifo;
+static fifo2 *		vbi_output_fifo;
 static producer         vbi_prod;
 
-extern long long	video_num_frames;
+extern int		video_num_frames;
 
 /*
  *  ETS 300 706 -- Enhanced Teletext specification
@@ -53,7 +54,7 @@ teletext_packet(unsigned char *p, unsigned char *buf, int line)
 	int mag0, packet;
 	int designation;
 
-	if ((packet = hamm16(buf)) < 0)
+	if ((packet = hamm16a(buf)) < 0)
 		return 0; /* hamming error */
 
 	mag0 = packet & 7;
@@ -66,7 +67,7 @@ teletext_packet(unsigned char *p, unsigned char *buf, int line)
 		if (mag0 != 0 /* 8 */ || packet != 30)
 			return r;
 
-		designation = hamm8(buf[2]);
+		designation = hamm8a[buf[2]];
 
 		if (designation <= 1)
 			return r; /* hamming error or packet 8/30/1 */
@@ -85,36 +86,29 @@ teletext_packet(unsigned char *p, unsigned char *buf, int line)
 void *
 vbi_thread(void *F)
 {
-	synchr_stream sstr;
 	consumer cons;
-	buffer *obuf = NULL, *ibuf;
+	buffer2 *obuf = NULL, *ibuf;
 	unsigned char *p = NULL, *p1 = NULL;
-	long long vbi_frame_count = 0;
+	int vbi_frame_count = 0;
 	int items, parity = -1;
 	vbi_sliced *s;
 
-	ASSERT("add vbi cons", add_consumer((fifo *) F, &cons));
-
-	memset(&sstr, 0, sizeof(sstr));
-	sstr.this_module = MOD_SUBTITLES;
-	sstr.frame_period = 1 / 25.0; /* for now PAL/SECAM only */
+	ASSERT("add vbi cons", add_consumer((fifo2 *) F, &cons));
 
 	if (do_subtitles)
-		mp1e_sync_run_in(&sstr, &cons, NULL);
+		remote_sync(&cons, MOD_SUBTITLES, 1 / 25.0);
 
 	while (vbi_frame_count < video_num_frames) { // XXX video XXX pdc
-		if (!(ibuf = wait_full_buffer(&cons)) || ibuf->used <= 0)
+		if (!(ibuf = wait_full_buffer2(&cons)) || ibuf->used <= 0)
 			break; // EOF or error
 
 		if (do_subtitles) {
-			mp1e_sync_drift(&sstr, ibuf->time, 0); // XXX BROKEN
-
-			if (mp1e_sync_break(&sstr, ibuf->time)) {
-				send_empty_buffer(&cons, ibuf);
+			if (remote_break(MOD_SUBTITLES, ibuf->time, 1 / 25.0)) {
+				send_empty_buffer2(&cons, ibuf);
 				break;
 			}
 
-			obuf = wait_empty_buffer(&vbi_prod);
+			obuf = wait_empty_buffer2(&vbi_prod);
 			p1 = p = obuf->data;
 
 			parity = 0;
@@ -154,19 +148,19 @@ vbi_thread(void *F)
 			obuf->time = ibuf->time;
 			obuf->used = p - obuf->data;
 
-			send_full_buffer(&vbi_prod, obuf);
+			send_full_buffer2(&vbi_prod, obuf);
 		}
 
-		send_empty_buffer(&cons, ibuf);
+		send_empty_buffer2(&cons, ibuf);
 	}
 
 	printv(2, "VBI: End of file\n");
 
 	if (do_subtitles)
 		for (;;) {
-			obuf = wait_empty_buffer(&vbi_prod);
+			obuf = wait_empty_buffer2(&vbi_prod);
 			obuf->used = 0;
-			send_full_buffer(&vbi_prod, obuf);
+			send_full_buffer2(&vbi_prod, obuf);
 		}
 
 	rem_consumer(&cons);
@@ -175,7 +169,7 @@ vbi_thread(void *F)
 }
 
 void
-vbi_init(fifo *f, multiplexer *mux)
+vbi_init(fifo2 *f)
 {
 	do_pdc = DO_PDC;
 
@@ -186,7 +180,7 @@ vbi_init(fifo *f, multiplexer *mux)
 
 		init_dvb_packet_filter(subtitle_pages);
 
-		vbi_output_fifo = mux_add_input_stream(mux,
+		vbi_output_fifo = mux_add_input_stream(
 			PRIVATE_STREAM_1, "vbi-ps1",
 			32 * 46, 5, 25.0, 294400 /* peak */);
 

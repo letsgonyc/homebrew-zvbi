@@ -38,13 +38,20 @@ extern void *		tk_main(void *);
 
 extern int		mux_mode;
 extern int		psycho_loops;
+extern int		audio_num_frames;
+extern int		video_num_frames;
 
 extern void options(int ac, char **av);
 
 extern void preview_init(void);
 
-#include "systems/libsystems.h"
+extern void video_init(void);
 
 extern volatile int program_shutdown;
+
+extern pthread_t video_emulation_thread_id;
+extern pthread_t audio_emulation_thread_id;
+extern pthread_mutex_t video_device_mutex;
+extern pthread_mutex_t audio_device_mutex;
 
 #endif // MAIN.H

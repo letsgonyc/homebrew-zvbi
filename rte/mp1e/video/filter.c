@@ -4,8 +4,9 @@
  *  Copyright (C) 1999-2000 Michael H. Schimek
  *
  *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License version 2 as
- *  published by the Free Software Foundation.
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) version 2.
  *
  *  This program is distributed in the hope that it will be useful,
  *  but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -17,7 +18,7 @@
  *  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-/* $Id: filter.c,v 1.5 2001-12-07 06:50:24 mschimek Exp $ */
+/* $Id: filter.c,v 1.1.1.1 2001-08-07 22:09:55 garetxe Exp $ */
 
 #include "../common/log.h"
 #include "../common/mmx.h"
@@ -26,7 +27,7 @@
 #include "video.h"
 
 int			(* filter)(unsigned char *, unsigned char *);
-// removed bool			temporal_interpolation;
+bool			temporal_interpolation;
 
 const char		cbp_order[6] = { 5, 4, 3, 1, 2, 0 };
 
@@ -36,10 +37,10 @@ filter_labels[] = {
 	"YUV 4:2:0 fastest",
 	"YUYV 4:2:2 fastest",
 	"YUYV 4:2:2 w/vertical decimation",
-	"YUYV 4:2:2 w/temporal interpolation", /* REMOVED */
+	"YUYV 4:2:2 w/temporal interpolation",
 	"YUYV 4:2:2 w/vertical interpolation",
 	"YUYV 4:2:2 field progressive 50/60 Hz",
-	"YUYV 4:2:2 50/60 Hz w/temporal interpolation", /* REMOVED */
+	"YUYV 4:2:2 50/60 Hz w/temporal interpolation",
 	"YVU 4:2:0 fastest",
 	"",
 	"",
@@ -384,38 +385,24 @@ YUYV_422_exp4(unsigned char *buffer, unsigned char *unused)
 	return s2 * 256 - (s * s);
 }
 
-/*
- *  Input:
- *  grab_width, grab_height (pixels)
- *  [encoded image] width, height (pixels)
- *  pitch (line distance, Y or YUYV, bytes)
- *
- *  Assumed:
- *  Y plane size = pitch * grab_height,
- *  U,V or V,U - Y distance = 4,5 * Y plane size / 4
- *  U,V pitch = pitch / 2
- *
- *  Output:
- *  width, height (pixels)
- *  filter initialized
- */
 void
 filter_init(int pitch)
 {
-	int padded_width, padded_height;
-	int y_bpp = 2, scale_x = 1, scale_y = 1;
+	int outer_width, outer_height;
+	int y_bpp = 2, scale_y = 1;
 	int off_x, off_y;
 	int uv_size = 0;
 	int u = 4, v = 5;
 
-//	temporal_interpolation = FALSE;
+	temporal_interpolation = FALSE;
+	filter_y_pitch = pitch;
 
 	switch (filter_mode) {
 	case CM_YVU:
 		u = 5; v = 4;
 	case CM_YUV:
 		filter = mmx_YUV_420;
-		uv_size = pitch * grab_height / 4;
+		uv_size = width * height / 4;
 		y_bpp = 1;
 		break;
 	case CM_YUYV:
@@ -425,22 +412,21 @@ filter_init(int pitch)
 
 	case CM_YUYV_EXP:
 		filter = YUYV_422_exp2;
-//		temporal_interpolation = FALSE;
+		temporal_interpolation = FALSE;
 		width = saturate(grab_width, 1, grab_width - 16);
 		height = saturate(grab_height, 1, grab_height - 16);
 		break;
 
 	case CM_YUYV_EXP2:
 		filter = YUYV_422_exp4;
-//		temporal_interpolation = FALSE;
+		temporal_interpolation = FALSE;
 		width = saturate(grab_width, 1, grab_width - 16);
 		height = saturate(grab_height, 1, grab_height - 16);
 		break;
 
 	case CM_YUYV_EXP_VERTICAL_DECIMATION:
-		FAIL("Sorry, the selected filter mode was experimental and is no longer available.\n");
 		filter = YUYV_422_exp3;
-//		temporal_interpolation = TRUE;
+		temporal_interpolation = TRUE;
 		scale_y = 2;
 		width = saturate(grab_width, 1, grab_width - 16);
 		height = saturate(grab_height / 2, 1, grab_height / 2 - 16);
@@ -457,9 +443,8 @@ filter_init(int pitch)
 
 	case CM_YUYV_TEMPORAL_INTERPOLATION:
 	case CM_YUYV_PROGRESSIVE_TEMPORAL:
-		FAIL("Sorry, the selected filter mode (temporal interpolation) is no longer available.\n");
 		filter = mmx_YUYV_422_ti;
-//		temporal_interpolation = TRUE;
+		temporal_interpolation = TRUE;
 		break;
 	
 	default:
@@ -467,39 +452,28 @@ filter_init(int pitch)
 			filter_labels[filter_mode]);
 	}
 
+	outer_width = (width + 15) >> 4;
+	outer_height = (height + 15) >> 4;
+
+	off_x = (grab_width - width + 1) >> 1;
+	off_y = (grab_height - height * scale_y + 1) >> 1;
+
 	/*
 	 *  Need a clipping mechanism (or padded buffers?), currently
 	 *  all memory accesses as 16 x 16 mblocks. Step #2: clear outside
 	 *  blocks to all zero and all outside samples to average of
 	 *  inside samples (for prediction and FDCT).
 	 */
+	if (off_x + outer_width > grab_width)
+		off_x = grab_width - outer_width;
+	if (off_y + outer_height * scale_y > grab_height)
+		off_y = grab_height - outer_height;
 
-	padded_width = ((width + 15) & -16) * scale_x;
-	padded_height = ((height + 15) & -16) * scale_y;
+	filter_y_offs = filter_y_pitch * off_y + off_x * y_bpp; 
+	filter_v_offs = filter_u_offs = filter_y_offs / 4;
 
-	if (padded_width > grab_width) {
-		width = (grab_width / scale_x) & -16;
-		padded_width = width * scale_x;
-	}
-	if (padded_height > grab_height) {
-		height = (grab_height / scale_y) & -16;
-		padded_height = height * scale_y;
-	}
-
-	/* Center the encoding window */
-	off_x = (grab_width - width * scale_x + 1) >> 1;
-	off_y = (grab_height - height * scale_y + 1) >> 1;
-
-	if (off_x + padded_width > grab_width)
-		off_x = grab_width - padded_width;
-	if (off_y + padded_height > grab_height)
-		off_y = grab_height - padded_height;
-
-	filter_y_pitch = pitch;
-
-	filter_y_offs = pitch * off_y + off_x * y_bpp;
-	filter_u_offs = uv_size * u + (filter_y_offs >> 2);
-	filter_v_offs = uv_size * v + (filter_y_offs >> 2);
+	filter_u_offs += uv_size * u;
+	filter_v_offs += uv_size * v;
 
 	printv(2, "Filter '%s'\n", filter_labels[filter_mode]);
 
@@ -507,17 +481,4 @@ filter_init(int pitch)
 		color_pred = filter;
 		filter = color_trap;
 	}
-/*
-	void *			dest;		// 0
-	void *			src;		// 1
-	filter_fn *		func;		// 2
-	int			offset;		// 3
-	int			u_offset;	// 4
-	int			v_offset;	// 5
-	int			stride;		// 6
-	int			uv_stride;	// 7
-	int			clip_col;	// 8
-	int			clip_row;	// 9
-	int			resv[6];
-*/
 }

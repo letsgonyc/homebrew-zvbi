@@ -33,15 +33,14 @@
 #include "../common/fifo.h"
 #include "../common/log.h"
 #include "systems.h"
+#include "stream.h"
 
-buffer *		(* mux_output)(struct multiplexer* mux,
-				       buffer *b);
+buffer2 *		(* mux_output)(buffer2 *b);
 
-static buffer		mux_buffer;
+static buffer2		mux_buffer;
 
-static buffer *
-output_stdout(struct multiplexer *mux,
-	      buffer *b)
+static buffer2 *
+output_stdout(buffer2 *b)
 {
 	unsigned char *s;
 	ssize_t r, n;
@@ -73,7 +72,7 @@ init_output_stdout(void)
 	int bsize = (mux_syn == 4) ? 2324 /* VCD */ : PACKET_SIZE;
 
 	ASSERT("allocate mux buffer, %d bytes",
-		init_buffer(&mux_buffer, bsize), bsize);
+		init_buffer2(&mux_buffer, bsize), bsize);
 	/*
 	 *  Attn: mux_buffer.size determines the packet size, not PACKET_SIZE.
 	 *  All buffers shall have the same size,
@@ -90,7 +89,7 @@ init_output_stdout(void)
 #if 0
 
 static buffer *
-output_buffered(struct multiplexer *mux, buffer *b)
+output_buffered(buffer *b)
 {
 	if (b)
 		send_full_buffer(output_fifo, b);

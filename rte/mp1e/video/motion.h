@@ -4,8 +4,9 @@
  *  Copyright (C) 2001 Michael H. Schimek
  *
  *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License version 2 as
- *  published by the Free Software Foundation.
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) version 2.
  *
  *  This program is distributed in the hope that it will be useful,
  *  but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -17,7 +18,7 @@
  *  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-/* $Id: motion.h,v 1.3 2001-10-16 11:18:18 mschimek Exp $ */
+/* $Id: motion.h,v 1.1.1.1 2001-08-07 22:10:09 garetxe Exp $ */
 
 #ifndef MOTION_H
 #define MOTION_H
@@ -45,7 +46,7 @@ extern unsigned int	predict_bidirectional_packed(unsigned char *from1, unsigned 
 extern unsigned int	predict_bidirectional_planar(unsigned char *from1, unsigned char *from2, unsigned int *vmc1, unsigned int *vmc2);
 
 extern unsigned int	predict_forward_motion(struct motion *M, unsigned char *, int);
-extern unsigned int	predict_bidirectional_motion(mpeg1_context *mpeg1, struct motion *M, unsigned int *, unsigned int *, int);
+extern unsigned int	predict_bidirectional_motion(struct motion *M, unsigned int *, unsigned int *, int);
 
 extern void		zero_forward_motion(void);
 extern void		t7(int range, int dist);

@@ -23,7 +23,7 @@
 #include "decoder.h"
 #include "hamm.h"
 
-#error program_invocation_name
+char *				my_name;
 int				verbose = 0;
 
 /*

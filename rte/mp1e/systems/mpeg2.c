@@ -4,8 +4,9 @@
  *  Copyright (C) 1999-2000 Michael H. Schimek
  *
  *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License version 2 as
- *  published by the Free Software Foundation.
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
  *
  *  This program is distributed in the hope that it will be useful,
  *  but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -17,7 +18,7 @@
  *  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-/* $Id: mpeg2.c,v 1.7 2001-11-28 22:13:24 mschimek Exp $ */
+/* $Id: mpeg2.c,v 1.1.1.1 2001-08-07 22:10:16 garetxe Exp $ */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -34,6 +35,7 @@
 #include "../options.h"
 #include "mpeg.h"
 #include "systems.h"
+#include "stream.h"
 
 #define put(p, val, bytes)						\
 do {									\
@@ -117,7 +119,7 @@ PS_pack_header(unsigned char *p, double scr, double system_rate)
 #define PS_SYSTEM_HEADER_SIZE(nstr) (12 + (nstr) * 3)
 
 static inline unsigned char *
-PS_system_header(multiplexer *mux, unsigned char *p, double system_rate_bound)
+PS_system_header(unsigned char *p, double system_rate_bound)
 {
 	int mux_rate_bound = ((unsigned int) ceil(system_rate_bound + 49)) / 50;
 	int audio_bound = 0;
@@ -130,7 +132,7 @@ PS_system_header(multiplexer *mux, unsigned char *p, double system_rate_bound)
 	ph = p;
 	p += 12;
 
-	for_all_nodes (str, &mux->streams, fifo.node) {
+	for_all_nodes (str, &mux_input_streams, fifo.node) {
 		put(p, str->stream_id, 1);
 
 		if (IS_VIDEO_STREAM(str->stream_id)) {
@@ -212,12 +214,11 @@ PES_packet_header(unsigned char *p, stream *str)
 #define Raud (0.0)
 
 static inline bool
-next_access_unit(stream *str, double *ppts, unsigned char **pph)
+next_access_unit(stream *str, double *ppts, unsigned char *ph)
 {
-	buffer *buf;
-	unsigned char *ph;
+	buffer2 *buf;
 
-	str->buf = buf = wait_full_buffer(&str->cons);
+	str->buf = buf = wait_full_buffer2(&str->cons);
 
 	str->ptr  = buf->data;
 	str->left = buf->used;
@@ -232,16 +233,15 @@ next_access_unit(stream *str, double *ppts, unsigned char **pph)
 			((buf->used * 8 * str->frame_rate)
 			 - str->eff_bit_rate) * Rvid;
 
-	if ((ph = *pph)) {
+	if (ph) {
 		if (IS_VIDEO_STREAM(str->stream_id)) {
 			switch (buf->type) {
 			case I_TYPE:
 			case P_TYPE:
-				*ppts = str->dts + str->ticks_per_frame * (buf->offset + 1);
+				*ppts = str->dts + str->ticks_per_frame * buf->offset;
 				ph[7] |= MARKER_PTS << 6;
 				time_stamp(ph +  9, MARKER_PTS, *ppts);
 				time_stamp(ph + 14, MARKER_DTS, str->dts);
-				*pph = NULL;
 				break;
 			
 			case B_TYPE:
@@ -249,7 +249,6 @@ next_access_unit(stream *str, double *ppts, unsigned char **pph)
 				ph[7] |= MARKER_PTS << 6;
 				time_stamp(ph +  9, MARKER_PTS, *ppts);
 				time_stamp(ph + 14, MARKER_DTS, str->dts);
-				*pph = NULL;
 				break;
 
 			default:
@@ -257,11 +256,8 @@ next_access_unit(stream *str, double *ppts, unsigned char **pph)
 			}			
 		} else {
 			*ppts = str->dts;
-/* XXX ?		*ppts = str->dts + str->pts_offset;
-*/
 			ph[7] |= MARKER_PTS_ONLY << 6;
 			time_stamp(ph + 9, MARKER_PTS_ONLY, *ppts);
-			*pph = NULL;
 		}
 	}
 
@@ -273,14 +269,14 @@ next_access_unit(stream *str, double *ppts, unsigned char **pph)
 #define LARGE_DTS 1E30
 
 static inline stream *
-schedule(multiplexer *mux)
+schedule(void)
 {
 	double dtsi_min = LARGE_DTS;
 	stream *s, *str;
 
 	str = NULL;
 
-	for_all_nodes (s, &mux->streams, fifo.node) {
+	for_all_nodes (s, &mux_input_streams, fifo.node) {
 		double dtsi = s->dts;
 
 		if (s->buf)
@@ -296,23 +292,20 @@ schedule(multiplexer *mux)
 }
 
 void *
-mpeg2_program_stream_mux(void *muxp)
+mpeg2_program_stream_mux(void *unused)
 {
-	multiplexer *mux = muxp;
 	unsigned char *p, *ph, *ps, *pl, *px;
 	unsigned long bytes_out = 0;
 	unsigned int pack_packet_count = PACKETS_PER_PACK;
 	unsigned int packet_count = 0;
 	unsigned int pack_count = 0;
+	unsigned int packet_size;
 	double system_rate, system_rate_bound;
 	double system_overhead;
 	double ticks_per_pack;
 	double scr, pts, front_pts = 0.0;
-	buffer *buf;
+	buffer2 *buf;
 	stream *str;
-
-	pthread_cleanup_push((void (*)(void *)) pthread_rwlock_unlock, (void *) &mux->streams.rwlock);
-	assert(pthread_rwlock_rdlock(&mux->streams.rwlock) == 0);
 
 	{
 		double preload_delay;
@@ -321,7 +314,7 @@ mpeg2_program_stream_mux(void *muxp)
 		int preload = 0;
 		int bit_rate = 0;
 
-		for_all_nodes (str, &mux->streams, fifo.node) {
+		for_all_nodes (str, &mux_input_streams, fifo.node) {
 			str->buf = NULL;
 			bit_rate += str->bit_rate;
 			str->eff_bit_rate = str->bit_rate;
@@ -330,7 +323,7 @@ mpeg2_program_stream_mux(void *muxp)
 			if (IS_VIDEO_STREAM(str->stream_id) && str->frame_rate < video_frame_rate)
 				video_frame_rate = frame_rate;
 
-			buf = wait_full_buffer(&str->cons);
+			buf = wait_full_buffer2(&str->cons);
 
 			if (buf->used <= 0)
 				FAIL("Premature end of file / error");
@@ -338,17 +331,19 @@ mpeg2_program_stream_mux(void *muxp)
 			str->cap_t0 = buf->time;
 	    		preload += buf->used;
 
-			unget_full_buffer(&str->cons, buf);
+			unget_full_buffer2(&str->cons, buf);
 
 			nstreams++;
 		}
 
-		buf = mux_output(mux, NULL);
+		buf = mux_output(NULL);
 
 		assert(buf && buf->size >= 512
 		           && buf->size <= 32768);
 
-		system_overhead = mux->packet_size / (mux->packet_size
+		packet_size = buf->size;
+
+		system_overhead = packet_size / (packet_size
 			- (PS_SYSTEM_HEADER_SIZE(nstreams) + PS_PACK_HEADER_SIZE / PACKETS_PER_PACK));
 
 		system_rate = system_rate_bound = bit_rate * system_overhead / 8;
@@ -357,9 +352,9 @@ mpeg2_program_stream_mux(void *muxp)
 			/ system_rate_bound * SYSTEM_TICKS;
 
 		scr = PS_SCR_offset / system_rate_bound * SYSTEM_TICKS;
-		ticks_per_pack = (mux->packet_size * PACKETS_PER_PACK) / system_rate_bound * SYSTEM_TICKS;
+		ticks_per_pack = (packet_size * PACKETS_PER_PACK) / system_rate_bound * SYSTEM_TICKS;
 
-		for_all_nodes (str, &mux->streams, fifo.node) {
+		for_all_nodes (str, &mux_input_streams, fifo.node) {
 			if (!IS_VIDEO_STREAM(str->stream_id)) {
 				str->pts_offset = (double) SYSTEM_TICKS / (video_frame_rate * 1.0);
 				/* + 0.1 to schedule video frames first */
@@ -381,25 +376,25 @@ mpeg2_program_stream_mux(void *muxp)
 			printv(4, "Pack #%d, scr=%f\n",	pack_count++, scr);
 
 			p = PS_pack_header(p, scr, system_rate);
-			p = PS_system_header(mux, p, system_rate_bound);
+			p = PS_system_header(p, system_rate_bound);
 
 			if (0)
 				scr += ticks_per_pack;
 			else {
 				int bit_rate = 0;
 
-				for_all_nodes (str, &mux->streams, fifo.node)
+				for_all_nodes (str, &mux_input_streams, fifo.node)
 					bit_rate += str->eff_bit_rate;
 
 				system_rate = bit_rate * system_overhead / 8;
-				scr += (mux->packet_size * PACKETS_PER_PACK) / system_rate * SYSTEM_TICKS;
+				scr += (packet_size * PACKETS_PER_PACK) / system_rate * SYSTEM_TICKS;
 			}
 
 			pack_packet_count = 0;
 		}
 
 reschedule:
-		if (!(str = schedule(mux)))
+		if (!(str = schedule()))
 			break;
 
 		ph = p;
@@ -418,7 +413,7 @@ reschedule:
 			int n;
 
 			if (str->left == 0) {
-				if (!next_access_unit(str, &pts, &ph)) {
+				if (!next_access_unit(str, &pts, ph)) {
 					str->dts = LARGE_DTS * 2.0; // don't schedule stream
 
 					if (pl == p) {
@@ -434,6 +429,8 @@ reschedule:
 
 					break;
 				}
+
+				ph = NULL;
 			}
 
 			n = MIN(str->left, px - p);
@@ -443,7 +440,7 @@ reschedule:
 			str->left -= n;
 
 			if (!str->left) {
-				send_empty_buffer(&str->cons, str->buf);
+				send_empty_buffer2(&str->cons, str->buf);
 
 				str->buf = NULL;
 				str->dts += str->ticks_per_frame;
@@ -461,7 +458,7 @@ reschedule:
 
 		bytes_out += buf->used = p - buf->data;
 
-		buf = mux_output(mux, buf);
+		buf = mux_output(buf);
 
 		assert(buf && buf->size >= 512
 		           && buf->size <= 32768);
@@ -503,9 +500,9 @@ reschedule:
 	} else
 		buf->used = 4;
 
-	mux_output(mux, buf);
-
-	pthread_cleanup_pop(1);
+	mux_output(buf);
 
 	return NULL;
 }
+
+

@@ -4,8 +4,9 @@
 #  Copyright (C) 1999-2000 Michael H. Schimek
 # 
 #  This program is free software; you can redistribute it and/or modify
-#  it under the terms of the GNU General Public License version 2 as
-#  published by the Free Software Foundation.
+#  it under the terms of the GNU General Public License as published by
+#  the Free Software Foundation; either version 2 of the License, or
+#  (at your option) version 2.
 # 
 #  This program is distributed in the hope that it will be useful,
 #  but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -17,7 +18,7 @@
 #  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 #
 
-# $Id: filter_mmx.s,v 1.4 2001-12-07 06:50:24 mschimek Exp $
+# $Id: filter_mmx.s,v 1.1.1.1 2001-08-07 22:10:11 garetxe Exp $
 
 # int
 # mmx_YUV_420(unsigned char *buffer, unsigned char *unused)
@@ -274,15 +275,16 @@ mmx_YUYV_422:
 	movq		%mm2,128+0(%ebx);		paddd		%mm4,%mm7;
 	movq		24(%eax),%mm4;			movq		%mm0,%mm3;
 	movq		%mm0,%mm1;			punpcklwd	%mm4,%mm3;
-	movq		%mm3,%mm2;			punpckhwd	%mm4,%mm1;
-	pand		%mm5,%mm0;			punpcklwd	%mm1,%mm3;
-	movq		%mm0,256-32(%edi);		punpckhwd	%mm1,%mm2;
+	decl		%ecx;				punpckhwd	%mm4,%mm1;
+	movq		%mm3,%mm2;			punpcklwd	%mm1,%mm3;
+	pand		%mm5,%mm0;			punpckhwd	%mm1,%mm2;
 	movq		(%eax,%edx),%mm1;		pand		%mm5,%mm4;
-	psrlw		$8,%mm3;			paddw		%mm0,%mm6;
-	movq		%mm4,256+8-32(%edi);		pmaddwd		%mm0,%mm0;
-	psrlw		$8,%mm2;			paddw		%mm4,%mm6;
-	movq		%mm3,8(%ebx);			pmaddwd		%mm4,%mm4;
-	paddd		%mm0,%mm7;			pand		%mm5,%mm1;
+	movq		%mm0,256-32(%edi);		paddw		%mm0,%mm6;
+	psrlw		$8,%mm3;			pmaddwd		%mm0,%mm0;
+	movq		%mm4,256+8-32(%edi);		paddw		%mm4,%mm6;
+	psrlw		$8,%mm2;			pmaddwd		%mm4,%mm4;
+	movq		%mm3,8(%ebx);			paddd		%mm0,%mm7;
+	movq		(%eax,%edx,2),%mm0;		pand		%mm5,%mm1;
 	movq		%mm2,128+8(%ebx);		paddd		%mm4,%mm7;
 	movq		8(%eax,%edx),%mm2;		paddw		%mm1,%mm6;
 	movq		16(%eax,%edx),%mm3;		pand		%mm5,%mm2;
@@ -503,287 +505,3 @@ mmx_YUYV_422_vi:
 	addl		1*4+20(%esp),%esi;	// s1 = buffer + filter_y_pitch * mb_row * 16 + mb_col * 32 + filter_y_offs
 	leal		(%esi,%edx),%eax;	// s2 = buffer + filter_y_pitch * (mb_row * 16 + 1) + mb_col * 32 + filter_y_offs
 	jmp		filter_s2t;
-
-
-
-
-
-
-
-
-
-
-
-	.text
-	.align		16
-	.globl		pmmx_YUV420_0
-
-pmmx_YUV420_0:	# eax fip, edx col, ecx row
-
-	pushl		%ebx;
-	movl		7*4(%eax),%ebx;		// uv_stride
-	imull		%ecx,%ebx;
-	pushl		%esi;
-	addl		%edx,%ebx;		// row * uv_stride + col
-	movl		1*4(%eax),%esi;		// src
-	leal		(%esi,%ebx,8),%ebx;	// src + row * 8 * uv_stride + col * 8
-	imull		6*4(%eax),%ecx;		// stride
-	addl		%edx,%ecx;
-	pushl		%edi;
-	movl		0*4(%eax),%edi;		// dest
-	addl		%ecx,%ecx;		// row * 2 * stride + col * 2
-	addl		3*4(%eax),%esi;		// offset
-	leal		(%esi,%ecx,8),%esi;	// Y = src + offset + row * 16 * stride + col * 16
-	movl		4*4(%eax),%ecx;		// u_offset
-	addl		%ebx,%ecx;		// U = src + u_offset + row * 8 * uv_stride + col * 8
-	addl		5*4(%eax),%ebx;		// V = src + v_offset + row * 8 * uv_stride + col * 8
-	movl		7*4(%eax),%edx;		// uv_stride
-	movl		6*4(%eax),%eax;		// stride
-
-	/* Cb, Cr */
-0:
-	movq		(%ecx),%mm0;
-	movq		(%ebx),%mm1;			pxor		%mm7,%mm7;
-	movq		(%ecx,%edx),%mm4;		movq		%mm0,%mm2;
-	movq		(%ebx,%edx),%mm5;		punpcklbw	%mm7,%mm0;
-	movq		(%ecx,%edx,2),%mm3;		punpckhbw	%mm7,%mm2;
-	movq		%mm0,512+0*16+0(%edi);		movq		%mm1,%mm0;
-	movq		%mm2,512+0*16+8(%edi);		punpcklbw	%mm7,%mm1;
-	movq		(%ebx,%edx,2),%mm2;		punpckhbw	%mm7,%mm0;
-	movq		%mm1,640+0*16+0(%edi);		movq		%mm4,%mm1;
-	movq		%mm0,640+0*16+8(%edi);		punpcklbw	%mm7,%mm4;
-	lea		(%ecx,%edx,2),%ecx;		punpckhbw	%mm7,%mm1;
-	movq		%mm4,512+1*16+0(%edi);		movq		%mm5,%mm4;
-	movq		%mm1,512+1*16+8(%edi);		punpcklbw	%mm7,%mm5;
-	lea		(%ebx,%edx,2),%ebx;		punpckhbw	%mm7,%mm4;
-	movq		%mm5,640+1*16+0(%edi);		movq		%mm3,%mm1;
-	movq		%mm4,640+1*16+8(%edi);		punpcklbw	%mm7,%mm3;
-	movq		(%ecx,%edx),%mm4;		punpckhbw	%mm7,%mm1;
-	movq		%mm3,512+2*16+0(%edi);		movq		%mm2,%mm3;
-	movq		(%ebx,%edx),%mm5;		punpcklbw	%mm7,%mm2;
-	movq		%mm1,512+2*16+8(%edi);		punpckhbw	%mm7,%mm3;
-	movq		%mm2,640+2*16+0(%edi);		movq		%mm4,%mm2;
-	movq		%mm3,640+2*16+8(%edi);		punpcklbw	%mm7,%mm4;
-	movq		(%ecx,%edx,2),%mm0;		punpckhbw	%mm7,%mm2;
-	movq		%mm4,512+3*16+0(%edi);		movq		%mm5,%mm4;
-	movq		%mm2,512+3*16+8(%edi);		punpcklbw	%mm7,%mm5;
-	movq		(%ebx,%edx,2),%mm1;		punpckhbw	%mm7,%mm4;
-	movq		%mm5,640+3*16+0(%edi);		lea		(%ecx,%edx,2),%ecx;
-	movq		%mm4,640+3*16+8(%edi);		lea		(%ebx,%edx,2),%ebx;
-	movq		(%ecx,%edx),%mm4;		movq		%mm0,%mm2;
-	movq		(%ebx,%edx),%mm5;		punpcklbw	%mm7,%mm0;
-	movq		(%ecx,%edx,2),%mm3;		punpckhbw	%mm7,%mm2;
-	movq		%mm0,512+4*16+0(%edi);		movq		%mm1,%mm0;
-	movq		%mm2,512+4*16+8(%edi);		punpcklbw	%mm7,%mm1;
-	movq		(%ebx,%edx,2),%mm2;		punpckhbw	%mm7,%mm0;
-	movq		%mm1,640+4*16+0(%edi);		movq		%mm4,%mm1;
-	movq		%mm0,640+4*16+8(%edi);		punpcklbw	%mm7,%mm4;
-	lea		(%ecx,%edx,2),%ecx;		punpckhbw	%mm7,%mm1;
-	movq		%mm4,512+5*16+0(%edi);		movq		%mm5,%mm4;
-	movq		%mm1,512+5*16+8(%edi);		punpcklbw	%mm7,%mm5;
-	lea		(%ebx,%edx,2),%ebx;		punpckhbw	%mm7,%mm4;
-	movq		%mm5,640+5*16+0(%edi);		movq		%mm3,%mm1;
-	movq		%mm4,640+5*16+8(%edi);		punpcklbw	%mm7,%mm3;
-	movq		(%ecx,%edx),%mm4;		punpckhbw	%mm7,%mm1;
-	movq		%mm3,512+6*16+0(%edi);		movq		%mm2,%mm3;
-	movq		(%ebx,%edx),%mm5;		punpcklbw	%mm7,%mm2;
-	movq		%mm1,512+6*16+8(%edi);		punpckhbw	%mm7,%mm3;
-	movq		%mm2,640+6*16+0(%edi);		movq		%mm4,%mm2;
-	movq		%mm3,640+6*16+8(%edi);		punpcklbw	%mm7,%mm4;
-	movq		(%esi),%mm0;			punpckhbw	%mm7,%mm2;
-	movq		%mm4,512+7*16+0(%edi);		movq		%mm5,%mm4;
-	movq		%mm2,512+7*16+8(%edi);		punpcklbw	%mm7,%mm5;
-	movl		$7,%ecx;			punpckhbw	%mm7,%mm4;
-	movq		%mm5,640+7*16+0(%edi);		movq		%mm7,%mm6;
-	movq		%mm4,640+7*16+8(%edi);		movq		%mm7,%mm5;
-
-	.p2align 4,,7
-
-	/* Y */
-1:
-	movq		(%esi,%eax),%mm2;		movq		%mm0,%mm1;
-	movq		8(%esi),%mm3;			punpcklbw	%mm7,%mm0;
-	paddw		%mm0,%mm5;			punpckhbw	%mm7,%mm1;
-	paddw		%mm1,%mm5;			movq		%mm0,(%edi);
-	pmaddwd		%mm0,%mm0;			movq		%mm1,8(%edi);
-	pmaddwd		%mm1,%mm1;			movq		%mm3,%mm4;
-	decl		%ecx;				punpcklbw	%mm7,%mm3;
-	paddd		%mm0,%mm6;			punpckhbw	%mm7,%mm4;
-	paddd		%mm1,%mm6; 			paddw		%mm3,%mm5;
-	movq		%mm3,256(%edi);			paddw		%mm4,%mm5;
-	movq		%mm4,256+8(%edi);		pmaddwd		%mm3,%mm3;
-	movq		(%esi,%eax,2),%mm0;		pmaddwd		%mm4,%mm4;
-	movq		%mm2,%mm1;			punpcklbw	%mm7,%mm2;
-	paddd		%mm3,%mm6;			punpckhbw	%mm7,%mm1;
-	movq		8(%esi,%eax),%mm3;		paddd		%mm4,%mm6;
-	paddw		%mm2,%mm5;			movq		%mm2,16(%edi);
-	paddw		%mm1,%mm5;			movq		%mm1,24(%edi);
-	pmaddwd		%mm2,%mm2;			movq		%mm3,%mm4;
-	pmaddwd		%mm1,%mm1;			punpcklbw	%mm7,%mm3;
-	leal		(%esi,%eax,2),%esi;		punpckhbw	%mm7,%mm4;
-	paddd		%mm2,%mm6;			paddw		%mm3,%mm5;
-	paddd		%mm1,%mm6;			paddw		%mm4,%mm5;
-	movq		%mm3,256+16(%edi);		pmaddwd		%mm3,%mm3;
-	movq		%mm4,256+24(%edi);		pmaddwd		%mm4,%mm4;
-	paddd		%mm3,%mm6;			leal		32(%edi),%edi;
-	paddd		%mm4,%mm6;			jne		1b;
-2:
-	movq		(%esi,%eax),%mm2;		movq		%mm0,%mm1;
-	movq		8(%esi),%mm3;			punpcklbw	%mm7,%mm0;
-	paddw		%mm0,%mm5;			punpckhbw	%mm7,%mm1;
-	paddw		%mm1,%mm5;			movq		%mm0,(%edi);
-	pmaddwd		%mm0,%mm0;			movq		%mm1,8(%edi);
-	movq		%mm3,%mm4;			punpcklbw	%mm7,%mm3;
-	pmaddwd		%mm1,%mm1;			punpckhbw	%mm7,%mm4;
-	paddd		%mm0,%mm6;			paddw		%mm3,%mm5;
-	movq		%mm3,256(%edi);			paddw		%mm4,%mm5;
-	paddd		%mm1,%mm6; 			pmaddwd		%mm3,%mm3;
-	movq		%mm4,256+8(%edi);		pmaddwd		%mm4,%mm4;
-	movq		%mm2,%mm1;			punpcklbw	%mm7,%mm2;
-	paddd		%mm3,%mm6;			punpckhbw	%mm7,%mm1;
-	paddd		%mm4,%mm6; 			paddw		%mm2,%mm5;
-	movq		%mm2,16(%edi);			paddw		%mm1,%mm5;
-	movq		%mm1,24(%edi);			pmaddwd		%mm2,%mm2;
-	movq		8(%esi,%eax),%mm3;		pmaddwd		%mm1,%mm1;
-	movq		%mm3,%mm4;			punpcklbw	%mm7,%mm3;
-	paddd		%mm2,%mm6;			punpckhbw	%mm7,%mm4;
-	paddd		%mm1,%mm6;			paddw		%mm3,%mm5;
-	movq		%mm3,256+16(%edi);		paddw		%mm4,%mm5;
-	movq		%mm4,256+24(%edi);		pmaddwd		%mm3,%mm3;
-	paddd		%mm3,%mm6;			pmaddwd		%mm4,%mm4;
-	pmaddwd		c1,%mm5;			paddd		%mm4,%mm6;
-	movq		%mm6,%mm0;			psrlq		$32,%mm6;
-	paddd		%mm0,%mm6;			popl		%edi;
-	movq		%mm5,%mm4;			psrlq		$32,%mm5;
-	paddd		%mm4,%mm5;			pslld		$8,%mm6;
-	movd		%mm5,%edx;			popl		%esi;
-	movd		%mm6,%eax;			imull		%edx,%edx;
-	subl		%edx,%eax;			popl		%ebx;
-	ret
-
-	.text
-	.align		16
-	.globl		pmmx_YUYV_0
-
-pmmx_YUYV_0: # eax fip, edx col, ecx row
-
-	imull		6*4(%eax),%ecx;
-	pushl		%ebx;
-	leal		(%ecx,%edx,2),%ecx;	// row * stride + col * 2
-	movq		c255,%mm7;
-	sall		$4,%ecx;
-	pushl		%esi;
-	movl		1*4(%eax),%esi;		// src
-	addl		%ecx,%esi;		
-	addl		3*4(%eax),%esi;		// src + offset + row * 16 * stride + col * 32
-	movl		$7,%ecx;
-	movq		(%esi),%mm0;
-	pxor		%mm6,%mm6;
-	movl		6*4(%eax),%edx;		// stride
-	pxor		%mm5,%mm5;
-	movl		0*4(%eax),%eax;		// dest
-	leal		512(%eax),%ebx;		// dest chroma
-	movq		(%esi,%edx),%mm2;
-
-	.p2align 4,,7
-
-1:
-	movq		%mm0,%mm3;			pand		%mm7,%mm0;
-	psrlw		$8,%mm3;			paddw		%mm0,%mm5;	// v1 u1 v0 u0
-	movq		%mm0,(%eax);			pmaddwd		%mm0,%mm0;
-	movq		%mm2,%mm1;			pand		%mm7,%mm2;
-	psrlw		$8,%mm1;			paddw		%mm2,%mm5;
-	paddw		%mm1,%mm3;    			paddd		%mm0,%mm6;
-	movq		8(%esi),%mm0;			psrlw		$1,%mm3;
-	movq		%mm2,16(%eax);			pmaddwd		%mm2,%mm2;
-	movq		%mm0,%mm4;			pand		%mm7,%mm0;
-	psrlw		$8,%mm4;			paddw		%mm0,%mm5;	// v3 u3 v2 u2
-	movq		%mm0,8(%eax);	    		paddd		%mm2,%mm6;
-	movq		8(%esi,%edx),%mm2;		pmaddwd		%mm0,%mm0;
-	movq		%mm2,%mm1;			pand		%mm7,%mm2;
-	psrlw		$8,%mm1;			paddw		%mm2,%mm5;
-	paddw		%mm1,%mm4;			paddd		%mm0,%mm6;
-	movq		16(%esi),%mm0;			psrlw		$1,%mm4;
-	movq		%mm3,%mm1;			punpcklwd	%mm4,%mm3;	// v2 v0 u2 u0
-	movq		%mm2,24(%eax);			punpckhwd	%mm4,%mm1;	// v3 v1 u3 u1
-	movq		%mm3,%mm4;			punpcklwd	%mm1,%mm3;	// v3 v2 v1 v0
-	pmaddwd		%mm2,%mm2;			punpckhwd	%mm1,%mm4;	// u3 u2 u1 u0
-	movq		%mm3,(%ebx);			movq		%mm0,%mm3;	
-	movq		%mm4,128+0(%ebx);		pand		%mm7,%mm0;
-	psrlw		$8,%mm3;			paddw		%mm0,%mm5;
-	movq		%mm0,256(%eax);			paddd		%mm2,%mm6;
-	movq		16(%esi,%edx),%mm2; 		pmaddwd		%mm0,%mm0;
-	movq		%mm2,%mm1;			pand		%mm7,%mm2;
-	psrlw		$8,%mm1;			paddw		%mm2,%mm5;
-	paddw		%mm1,%mm3;			paddd		%mm0,%mm6;
-	movq		24(%esi),%mm0;			psrlw		$1,%mm3;
-	movq		%mm2,256+16(%eax);		pmaddwd		%mm2,%mm2;
-	movq		%mm0,%mm4;			pand		%mm7,%mm0;
-	psrlw		$8,%mm4;			paddw		%mm0,%mm5;
-	movq		%mm0,256+8(%eax);		paddd		%mm2,%mm6;
-	movq		24(%esi,%edx),%mm2;		pmaddwd		%mm0,%mm0;
-	movq		%mm2,%mm1;			pand		%mm7,%mm2;
-	psrlw		$8,%mm1;			paddw		%mm2,%mm5;
-	paddw		%mm1,%mm4;			paddd		%mm0,%mm6;
-	movq		(%esi,%edx,2),%mm0;		psrlw		$1,%mm4;
-	movq		%mm2,256+24(%eax);		pmaddwd		%mm2,%mm2;
-	leal		(%esi,%edx,2),%esi;		paddd		%mm2,%mm6;
-	movq		%mm3,%mm1;			punpcklwd	%mm4,%mm3;
-	movq		(%esi,%edx),%mm2;		punpckhwd	%mm4,%mm1;
-	movq		%mm3,%mm4;			punpcklwd	%mm1,%mm3;
-	addl		$32,%eax;			punpckhwd	%mm1,%mm4;
-	movq		%mm3,8(%ebx);			decl		%ecx;
-	movq		%mm4,128+8(%ebx);		leal		16(%ebx),%ebx;
-	jne 		1b;
-
-	movq		%mm0,%mm3;			pand		%mm7,%mm0;
-	psrlw		$8,%mm3;			paddw		%mm0,%mm5;
-	movq		%mm0,(%eax);			pmaddwd		%mm0,%mm0;
-	movq		%mm2,%mm1;			pand		%mm7,%mm2;
-	psrlw		$8,%mm1;			paddw		%mm2,%mm5;
-	paddw		%mm1,%mm3;    			paddd		%mm0,%mm6;
-	movq		8(%esi),%mm0;			psrlw		$1,%mm3;
-	movq		%mm2,16(%eax);			pmaddwd		%mm2,%mm2;
-	movq		%mm0,%mm4;			pand		%mm7,%mm0;
-	psrlw		$8,%mm4;			paddw		%mm0,%mm5;
-	movq		%mm0,8(%eax);	    		paddd		%mm2,%mm6;
-	movq		8(%esi,%edx),%mm2;		pmaddwd		%mm0,%mm0;
-	movq		%mm2,%mm1;			pand		%mm7,%mm2;
-	psrlw		$8,%mm1;			paddw		%mm2,%mm5;
-	paddw		%mm1,%mm4;			paddd		%mm0,%mm6;
-	movq		16(%esi),%mm0;			psrlw		$1,%mm4;
-	movq		%mm3,%mm1;			punpcklwd	%mm4,%mm3;
-	movq		%mm2,24(%eax);			punpckhwd	%mm4,%mm1;
-	movq		%mm3,%mm4;			punpcklwd	%mm1,%mm3;
-	pmaddwd		%mm2,%mm2;			punpckhwd	%mm1,%mm4;
-	movq		%mm3,(%ebx);			movq		%mm0,%mm3;	
-	movq		%mm4,128+0(%ebx);		pand		%mm7,%mm0;
-	psrlw		$8,%mm3;			paddw		%mm0,%mm5;
-	movq		%mm0,256(%eax);			paddd		%mm2,%mm6;
-	movq		16(%esi,%edx),%mm2; 		pmaddwd		%mm0,%mm0;
-	movq		%mm2,%mm1;			pand		%mm7,%mm2;
-	psrlw		$8,%mm1;			paddw		%mm2,%mm5;
-	paddw		%mm1,%mm3;			paddd		%mm0,%mm6;
-	movq		24(%esi),%mm0;			psrlw		$1,%mm3;
-	movq		%mm2,256+16(%eax);		pmaddwd		%mm2,%mm2;
-	movq		%mm0,%mm4;			pand		%mm7,%mm0;
-	psrlw		$8,%mm4;			paddw		%mm0,%mm5;
-	movq		%mm0,256+8(%eax);		paddd		%mm2,%mm6;
-	movq		24(%esi,%edx),%mm2;		pmaddwd		%mm0,%mm0;
-	movq		%mm2,%mm1;			pand		%mm7,%mm2;
-	psrlw		$8,%mm1;			paddw		%mm2,%mm5;
-	paddw		%mm1,%mm4;			paddd		%mm0,%mm6;
-	movq		%mm3,%mm1;			psrlw		$1,%mm4;
-	movq		%mm2,256+24(%eax);		pmaddwd		%mm2,%mm2;
-	punpcklwd	%mm4,%mm3;			paddd		%mm2,%mm6;
-	punpckhwd	%mm4,%mm1;			movq		%mm3,%mm4;
-	pmaddwd		c1,%mm5;			punpcklwd	%mm1,%mm3;
-	movq		%mm6,%mm0;			punpckhwd	%mm1,%mm4;
-	movq		%mm3,8(%ebx);			psrlq		$32,%mm6;
-	movq		%mm5,%mm3;			psrlq		$32,%mm5;
-	movq		%mm4,128+8(%ebx);		paddd		%mm0,%mm6;	
-	paddd		%mm3,%mm5;			pslld		$8,%mm6;
-	movd		%mm5,%edx;			popl		%esi;
-	movd		%mm6,%eax;			imull		%edx,%edx;
-	subl		%edx,%eax;			popl		%ebx;
-	ret

@@ -19,7 +19,7 @@
  *  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-/* $Id: b_ffmpeg.c,v 1.3 2001-10-16 11:18:12 mschimek Exp $ */
+/* $Id: b_ffmpeg.c,v 1.1.1.1 2001-08-07 22:10:18 garetxe Exp $ */
 #include <stdio.h>
 #include <string.h>
 #include <sys/types.h>
@@ -66,7 +66,7 @@ enc_thread			(void		*opaque)
 {
 	rte_context *context = opaque;
 	backend_private *priv = (backend_private*)context->private;
-	buffer *b;
+	buffer2 *b;
 	AVFormatContext *s = &priv->oc;
 	int ret, pixels, i;
 	UINT8 audio_buffer[4096];
@@ -89,10 +89,10 @@ enc_thread			(void		*opaque)
 			if (enc->codec_type == CODEC_TYPE_AUDIO)
 			{
 				assert(context->mode & RTE_AUDIO);
-				b = wait_full_buffer(&aud);
+				b = wait_full_buffer2(&aud);
 				if (b->rte_flags & BLANK_BUFFER)
 				{
-					send_empty_buffer(&aud, b);
+					send_empty_buffer2(&aud, b);
 					goto done;
 				}
 				ret = avcodec_encode_audio(enc,
@@ -103,15 +103,15 @@ enc_thread			(void		*opaque)
 				pkt.data = audio_buffer;
 				pkt.size = ret;
 				av_write_packet(s, &pkt);
-				send_empty_buffer(&aud, b);
+				send_empty_buffer2(&aud, b);
 			}
 			else if (enc->codec_type == CODEC_TYPE_VIDEO)
 			{
 				assert(context->mode & RTE_VIDEO);
-				b = wait_full_buffer(&vid);
+				b = wait_full_buffer2(&vid);
 				if (b->rte_flags & BLANK_BUFFER)
 				{
-					send_empty_buffer(&vid, b);
+					send_empty_buffer2(&vid, b);
 					goto done;
 				}
 				picture.data[0] = b->data;
@@ -150,7 +150,7 @@ enc_thread			(void		*opaque)
 				pkt.data = video_buffer;
 				pkt.size = ret;
 				av_write_packet(s, &pkt);
-				send_empty_buffer(&vid, b);
+				send_empty_buffer2(&vid, b);
 			}
 		}
 
@@ -488,7 +488,6 @@ rte_backend_info b_ffmpeg_info =
 	context_new,
 	context_destroy,
 	init_context,
-	NULL, /* no post_init_context */
 	uninit_context,
 	start,
 	stop,

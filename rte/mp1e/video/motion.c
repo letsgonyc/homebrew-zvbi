@@ -5,8 +5,9 @@
  *  Copyright (C) 2001 Michael H. Schimek
  *
  *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License version 2 as
- *  published by the Free Software Foundation.
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) version 2.
  *
  *  This program is distributed in the hope that it will be useful,
  *  but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -18,7 +19,7 @@
  *  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-/* $Id: motion.c,v 1.7 2001-11-22 17:51:07 mschimek Exp $ */
+/* $Id: motion.c,v 1.1.1.1 2001-08-07 22:10:07 garetxe Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #  include <config.h>
@@ -31,7 +32,7 @@
 #include "common/mmx.h"
 #include "common/math.h"
 #include "common/profile.h"
-#include "video.h"
+#include "mblock.h"
 #include "motion.h"
 
 #define AUTOR 1		/* search range estimation (P frames only) */
@@ -53,13 +54,10 @@ search_fn *search;
 mmx_t bbmin, bbdxy, crdxy, crdy0;
 
 /*
-const short
-half_weight[4][4] = {
-	{ 16 + 5,  16 + 3, 16 + 5, 16 + 3 },
-	{ 16 + 3,  16 + 0, 16 + 3, 16 + 0 },
-	{ 16 + 5,  16 + 3, 16 + 5, 16 + 3 },
-	{ 16 + 3,  16 + 0, 16 + 3, 16 + 0 }
-};
+ *  vvv                           |||
+ *  a B B B B b b b b C C C C c c c c D
+ *   . . . . + + + + . . . . + + + + .
+ *   ^^^                           |||
  */
 
 // XXX alias mblock
@@ -100,7 +98,7 @@ mmx_load_interp(unsigned char *p, int pitch, int dx, int dy)
 		" movq		%%mm1,temp2h(%1);\n"
 
 		" pushl		%%ecx;\n"
-		" movzbl	16(%0),%%ecx;\n"
+		" movzxb	16(%0),%%ecx;\n"
 		" movd		%%ecx,%%mm2;\n"
 		" movb		%%cl,temp11+18*16(%2);\n"
 		" movb		17(%0),%%cl;\n"
@@ -193,7 +191,7 @@ mmx_load_interp(unsigned char *p, int pitch, int dx, int dy)
 			" movq		%%mm0,temp22-16(%1);\n"
 
 			" pushl		%%ecx;\n"
-			" movzbl	16(%0),%%ecx;\n"
+			" movzxb		16(%0),%%ecx;\n"
 			" movd		%%ecx,%%mm2;\n"
 			" movb		%%cl,temp11+18*16(%2);\n"
 			" movb		17(%0),%%cl;\n"
@@ -303,7 +301,7 @@ mmx_load_interp(unsigned char *p, int pitch, int dx, int dy)
 		" movq		%%mm4,%%mm1;\n"
 		" psrlq		$8,%%mm1;\n"
 		" pushl		%%edx;\n"
-		" movzbl	16(%0),%%edx;\n"
+		" movzxb	16(%0),%%edx;\n"
 		" movd		%%edx,%%mm2;\n"
 		" popl		%%edx;\n"
 		" psllq		$56,%%mm2;\n"
@@ -357,9 +355,9 @@ mmx_load_interp(unsigned char *p, int pitch, int dx, int dy)
 		" psrlq		$8,%%mm1;\n"
 		" pushl		%%ecx;\n"
 		" pushl		%%edx;\n"
-		" movzbl	temp11+18*16+16,%%ecx;\n"
+		" movzxb	temp11+18*16+16,%%ecx;\n"
 		" movd		%%ecx,%%mm2;\n"
-		" movzbl	16(%0),%%edx;\n"
+		" movzxb	16(%0),%%edx;\n"
 		" addl		%%edx,%%ecx;\n"
 		" incl		%%ecx;\n"
 		" shrl		$1,%%ecx;\n"
@@ -411,17 +409,17 @@ mmx_load_interp(unsigned char *p, int pitch, int dx, int dy)
 
 		" pushl		%%ecx;\n"
 		" pushl		%%edx;\n"
-		" movzbl	temp11+18*16+16,%%ecx;\n"
-		" movzbl	temp2h+18*16+16,%%edx;\n"
+		" movzxb	temp11+18*16+16,%%ecx;\n"
+		" movzxb	temp2h+18*16+16,%%edx;\n"
 		" addl		%%edx,%%ecx;\n"
 		" movd		%%ecx,%%mm4;\n"
 		" incl		%%ecx;\n"
 		" movl		%%ecx,%%edx;\n"
 		" shrl		$1,%%ecx;\n"
 		" movb		%%cl,temp2h+18*16+16;\n"
-		" movzbl	16(%0),%%ecx;\n"
+		" movzxb	16(%0),%%ecx;\n"
 		" addl		%%ecx,%%edx;\n"
-		" movzbl	17(%0),%%ecx;\n"
+		" movzxb	17(%0),%%ecx;\n"
 		" addl		%%ecx,%%edx;\n"
 		" incl		%%edx;\n"
 		" shrl		$2,%%edx;\n"
@@ -429,7 +427,7 @@ mmx_load_interp(unsigned char *p, int pitch, int dx, int dy)
 		" popl		%%edx;\n"
 		" popl		%%ecx;\n"
 
-		/* temp22 16 */
+		/* temp22 16 [1 & ((ab & cd) ^ ((ab ^ cd) & ~((a ^ b) | (c ^ d))))] */
 
 		" movq		%%mm5,%%mm2;\n"
 		" movq		%%mm6,%%mm3;\n"
@@ -500,7 +498,7 @@ sse_load_interp(unsigned char *p, int pitch, int dx, int dy)
 		" movq		%%mm1,temp2h(%1);\n"
 
 		" pushl		%%ecx;\n"
-		" movzbl	16(%0),%%ecx;\n"
+		" movzxb	16(%0),%%ecx;\n"
 		" movd		%%ecx,%%mm2;\n"
 		" movb		%%cl,temp11+18*16(%2);\n"
 		" movb		17(%0),%%cl;\n"
@@ -556,7 +554,7 @@ sse_load_interp(unsigned char *p, int pitch, int dx, int dy)
 			" movq		%%mm0,temp22-16(%1);\n"
 
 			" pushl		%%ecx;\n"
-			" movzbl	16(%0),%%ecx;\n"
+			" movzxb	16(%0),%%ecx;\n"
 			" movd		%%ecx,%%mm2;\n"
 			" movb		%%cl,temp11+18*16(%2);\n"
 			" movb		17(%0),%%cl;\n"
@@ -638,7 +636,7 @@ sse_load_interp(unsigned char *p, int pitch, int dx, int dy)
 		" movq		%%mm4,%%mm1;\n"
 		" psrlq		$8,%%mm1;\n"
 		" pushl		%%edx;\n"
-		" movzbl	16(%0),%%edx;\n"
+		" movzxb	16(%0),%%edx;\n"
 		" movd		%%edx,%%mm2;\n"
 		" popl		%%edx;\n"
 		" psllq		$56,%%mm2;\n"
@@ -676,9 +674,9 @@ sse_load_interp(unsigned char *p, int pitch, int dx, int dy)
 
 		" pushl		%%ecx;\n"
 		" pushl		%%edx;\n"
-		" movzbl	temp11+18*16+16,%%ecx;\n"
+		" movzxb	temp11+18*16+16,%%ecx;\n"
 		" movd		%%ecx,%%mm2;\n"
-		" movzbl	16(%0),%%edx;\n"
+		" movzxb	16(%0),%%edx;\n"
 		" addl		%%edx,%%ecx;\n"
 		" incl		%%ecx;\n"
 		" shrl		$1,%%ecx;\n"
@@ -706,17 +704,17 @@ sse_load_interp(unsigned char *p, int pitch, int dx, int dy)
 
 		" pushl		%%ecx;\n"
 		" pushl		%%edx;\n"
-		" movzbl	temp11+18*16+16,%%ecx;\n"
-		" movzbl	temp2h+18*16+16,%%edx;\n"
+		" movzxb	temp11+18*16+16,%%ecx;\n"
+		" movzxb	temp2h+18*16+16,%%edx;\n"
 		" addl		%%edx,%%ecx;\n"
 		" movd		%%ecx,%%mm4;\n"
 		" incl		%%ecx;\n"
 		" movl		%%ecx,%%edx;\n"
 		" shrl		$1,%%ecx;\n"
 		" movb		%%cl,temp2h+18*16+16;\n"
-		" movzbl	16(%0),%%ecx;\n"
+		" movzxb	16(%0),%%ecx;\n"
 		" addl		%%ecx,%%edx;\n"
-		" movzbl	17(%0),%%ecx;\n"
+		" movzxb	17(%0),%%ecx;\n"
 		" addl		%%ecx,%%edx;\n"
 		" incl		%%edx;\n"
 		" shrl		$2,%%edx;\n"
@@ -724,7 +722,7 @@ sse_load_interp(unsigned char *p, int pitch, int dx, int dy)
 		" popl		%%edx;\n"
 		" popl		%%ecx;\n"
 
-		/* temp22 16 */
+		/* temp22 16 [1 & ((ab & cd) ^ ((ab ^ cd) & ~((a ^ b) | (c ^ d))))] */
 
 		" movq		%%mm5,%%mm2;\n"
 		" movq		%%mm6,%%mm3;\n"
@@ -795,7 +793,7 @@ _3dn_load_interp(unsigned char *p, int pitch, int dx, int dy)
 		" movq		%%mm1,temp2h(%1);\n"
 
 		" pushl		%%ecx;\n"
-		" movzbl	16(%0),%%ecx;\n"
+		" movzxb	16(%0),%%ecx;\n"
 		" movd		%%ecx,%%mm2;\n"
 		" movb		%%cl,temp11+18*16(%2);\n"
 		" movb		17(%0),%%cl;\n"
@@ -851,7 +849,7 @@ _3dn_load_interp(unsigned char *p, int pitch, int dx, int dy)
 			" movq		%%mm0,temp22-16(%1);\n"
 
 			" pushl		%%ecx;\n"
-			" movzbl	16(%0),%%ecx;\n"
+			" movzxb	16(%0),%%ecx;\n"
 			" movd		%%ecx,%%mm2;\n"
 			" movb		%%cl,temp11+18*16(%2);\n"
 			" movb		17(%0),%%cl;\n"
@@ -933,7 +931,7 @@ _3dn_load_interp(unsigned char *p, int pitch, int dx, int dy)
 		" movq		%%mm4,%%mm1;\n"
 		" psrlq		$8,%%mm1;\n"
 		" pushl		%%edx;\n"
-		" movzbl	16(%0),%%edx;\n"
+		" movzxb	16(%0),%%edx;\n"
 		" movd		%%edx,%%mm2;\n"
 		" popl		%%edx;\n"
 		" psllq		$56,%%mm2;\n"
@@ -971,9 +969,9 @@ _3dn_load_interp(unsigned char *p, int pitch, int dx, int dy)
 
 		" pushl		%%ecx;\n"
 		" pushl		%%edx;\n"
-		" movzbl	temp11+18*16+16,%%ecx;\n"
+		" movzxb	temp11+18*16+16,%%ecx;\n"
 		" movd		%%ecx,%%mm2;\n"
-		" movzbl	16(%0),%%edx;\n"
+		" movzxb	16(%0),%%edx;\n"
 		" addl		%%edx,%%ecx;\n"
 		" incl		%%ecx;\n"
 		" shrl		$1,%%ecx;\n"
@@ -1001,17 +999,17 @@ _3dn_load_interp(unsigned char *p, int pitch, int dx, int dy)
 
 		" pushl		%%ecx;\n"
 		" pushl		%%edx;\n"
-		" movzbl	temp11+18*16+16,%%ecx;\n"
-		" movzbl	temp2h+18*16+16,%%edx;\n"
+		" movzxb	temp11+18*16+16,%%ecx;\n"
+		" movzxb	temp2h+18*16+16,%%edx;\n"
 		" addl		%%edx,%%ecx;\n"
 		" movd		%%ecx,%%mm4;\n"
 		" incl		%%ecx;\n"
 		" movl		%%ecx,%%edx;\n"
 		" shrl		$1,%%ecx;\n"
 		" movb		%%cl,temp2h+18*16+16;\n"
-		" movzbl	16(%0),%%ecx;\n"
+		" movzxb	16(%0),%%ecx;\n"
 		" addl		%%ecx,%%edx;\n"
-		" movzbl	17(%0),%%ecx;\n"
+		" movzxb	17(%0),%%ecx;\n"
 		" addl		%%ecx,%%edx;\n"
 		" incl		%%edx;\n"
 		" shrl		$2,%%edx;\n"
@@ -1019,7 +1017,7 @@ _3dn_load_interp(unsigned char *p, int pitch, int dx, int dy)
 		" popl		%%edx;\n"
 		" popl		%%ecx;\n"
 
-		/* temp22 16 */
+		/* temp22 16 [1 & ((ab & cd) ^ ((ab ^ cd) & ~((a ^ b) | (c ^ d))))] */
 
 		" movq		%%mm5,%%mm2;\n"
 		" movq		%%mm6,%%mm3;\n"
@@ -1851,16 +1849,16 @@ mmx_psse_4(char t[16][16], char *p, int pitch)
 
 		" movq		%%mm4,%%mm2;\n"
 		" movq		%%mm1,%%mm3;\n"
-		" pcmpgtb	%%mm1,%%mm2;\n"
+		" pcmpgtb		%%mm1,%%mm2;\n"
 		" psubb		%%mm4,%%mm1;\n"
 		" movq		%%mm1,%%mm0;\n"
 		" punpcklbw	%%mm2,%%mm0;\n"
-		" pmullw	%%mm0,%%mm0;\n"
-		" paddusw	%%mm0,%%mm6;\n"
+		" pmullw		%%mm0,%%mm0;\n"
+		" paddusw		%%mm0,%%mm6;\n"
 		" movd		16(%0),%%mm0;\n"
 		" punpckhbw	%%mm2,%%mm1;\n"
-		" pmullw	%%mm1,%%mm1;\n"
-		" paddusw	%%mm1,%%mm6;\n"
+		" pmullw		%%mm1,%%mm1;\n"
+		" paddusw		%%mm1,%%mm6;\n"
 
 		" movq		16(%1),%%mm1;\n"
 
@@ -1872,34 +1870,34 @@ mmx_psse_4(char t[16][16], char *p, int pitch)
 
 		" movq		%%mm5,%%mm2;\n"
 		" movq		%%mm1,%%mm3;\n"
-		" pcmpgtb	%%mm1,%%mm2;\n"
+		" pcmpgtb		%%mm1,%%mm2;\n"
 		" psubb		%%mm5,%%mm1;\n"
 		" movq		%%mm1,%%mm4;\n"
 		" punpcklbw	%%mm2,%%mm4;\n"
-		" pmullw	%%mm4,%%mm4;\n"
-		" paddusw	%%mm4,%%mm6;\n"
+		" pmullw		%%mm4,%%mm4;\n"
+		" paddusw		%%mm4,%%mm6;\n"
 		" movq		24(%1),%%mm4;\n"
 		" punpckhbw	%%mm2,%%mm1;\n"
-		" pmullw	%%mm1,%%mm1;\n"
-		" paddusw	%%mm1,%%mm6;\n"
+		" pmullw		%%mm1,%%mm1;\n"
+		" paddusw		%%mm1,%%mm6;\n"
 
 		" movd		16(%0,%2),%%mm5;\n"
 
 		" movq		%%mm0,%%mm2;\n"
 		" movq		%%mm4,%%mm3;\n"
-		" pcmpgtb	%%mm4,%%mm2;\n"
+		" pcmpgtb		%%mm4,%%mm2;\n"
 		" psubb		%%mm0,%%mm4;\n"
 		" movq		%%mm4,%%mm1;\n"
 		" punpcklbw	%%mm2,%%mm1;\n"
-		" pmullw	%%mm1,%%mm1;\n"
-		" paddusw	%%mm1,%%mm6;\n"
+		" pmullw		%%mm1,%%mm1;\n"
+		" paddusw		%%mm1,%%mm6;\n"
 		" movq		bbmin,%%mm1;\n"
 		" punpckhbw	%%mm2,%%mm4;\n"
 		" movq		bbdxy,%%mm2;\n"
-		" pmullw	%%mm4,%%mm4;\n"
+		" pmullw		%%mm4,%%mm4;\n"
 
 		" psrlq		$32,%%mm0;\n"
-		" paddusw	%%mm4,%%mm6;\n"
+		" paddusw		%%mm4,%%mm6;\n"
 		" movq		crdxy,%%mm4;\n"
 		" psllq		$32,%%mm5;\n"
 		" psubw		c1_15w,%%mm6;\n"
@@ -1907,32 +1905,32 @@ mmx_psse_4(char t[16][16], char *p, int pitch)
 		" paddb		c4,%%mm4;\n"
 
 		" movq		%%mm0,%%mm5;\n"
-		" pcmpgtb	%%mm3,%%mm5;\n"
+		" pcmpgtb		%%mm3,%%mm5;\n"
 		" psubb		%%mm0,%%mm3;\n"
 		" movq		%%mm3,%%mm0;\n"
 		" punpcklbw	%%mm5,%%mm0;\n"
-		" pmullw	%%mm0,%%mm0;\n"
-		" paddusw	%%mm0,%%mm7;\n"
+		" pmullw		%%mm0,%%mm0;\n"
+		" paddusw		%%mm0,%%mm7;\n"
 		" punpckhbw	%%mm5,%%mm3;\n"
-		" pmullw	%%mm3,%%mm3;\n"
-		" paddusw	%%mm3,%%mm7;\n"
+		" pmullw		%%mm3,%%mm3;\n"
+		" paddusw		%%mm3,%%mm7;\n"
 
 		" movq		%%mm4,crdxy;\n"
 
 		" movq		%%mm4,%%mm5;\n"
 		" pxor		%%mm3,%%mm3;\n"
-		" pcmpgtb	%%mm4,%%mm3;\n"
+		" pcmpgtb		%%mm4,%%mm3;\n"
 		" pxor		%%mm3,%%mm5;\n"
 		" psubb		%%mm3,%%mm5;\n"
 
 		" movq		%%mm5,%%mm3;\n"
 		" psrlw		$8,%%mm5;\n"
-		" paddsw	%%mm5,%%mm6;\n"
+		" paddsw		%%mm5,%%mm6;\n"
 		" pand		c255,%%mm3;\n"
-		" paddsw	%%mm3,%%mm6;\n"
+		" paddsw		%%mm3,%%mm6;\n"
 
 		" movq		%%mm1,%%mm5;\n"
-		" pcmpgtw	%%mm6,%%mm5;\n"
+		" pcmpgtw		%%mm6,%%mm5;\n"
 		" movq		%%mm1,%%mm3;\n"
 		" pxor		%%mm6,%%mm3;\n"
 		" pand		%%mm5,%%mm3;\n"
@@ -1953,7 +1951,7 @@ mmx_psse_4(char t[16][16], char *p, int pitch)
 		" por		%%mm5,%%mm4;\n"
 
 		" movq		%%mm1,%%mm5;\n"
-		" pcmpgtw	%%mm6,%%mm5;\n"
+		" pcmpgtw		%%mm6,%%mm5;\n"
 		" movq		%%mm1,%%mm3;\n"
 		" pxor		%%mm6,%%mm3;\n"
 		" pand		%%mm5,%%mm3;\n"
@@ -1974,7 +1972,7 @@ mmx_psse_4(char t[16][16], char *p, int pitch)
 		" por		%%mm5,%%mm4;\n"
 
 		" movq		%%mm1,%%mm5;\n"
-		" pcmpgtw	%%mm6,%%mm5;\n"
+		" pcmpgtw		%%mm6,%%mm5;\n"
 		" movq		%%mm1,%%mm3;\n"
 		" pxor		%%mm6,%%mm3;\n"
 		" pand		%%mm5,%%mm3;\n"
@@ -1995,7 +1993,7 @@ mmx_psse_4(char t[16][16], char *p, int pitch)
 		" por		%%mm5,%%mm4;\n"
 
 		" movq		%%mm1,%%mm5;\n"
-		" pcmpgtw	%%mm6,%%mm5;\n"
+		" pcmpgtw		%%mm6,%%mm5;\n"
 		" movq		%%mm1,%%mm3;\n"
 		" pxor		%%mm6,%%mm3;\n"
 		" pand		%%mm5,%%mm3;\n"
@@ -2478,10 +2476,7 @@ sse_psse_8(char t[16][16], char *p, int pitch)
 		" paddsw	%%mm5,%%mm6;\n"
 		" pand		c255,%%mm3;\n"
 		" paddsw	%%mm3,%%mm6;\n"
-/*
-	movq, pminsw, pmaxsw, pcmpeqw
-	pxor, pand, pxor, pxor
-*/
+
 		" movq		%%mm1,%%mm5;\n"
 		" pcmpgtw	%%mm6,%%mm5;\n"
 		" movq		%%mm1,%%mm3;\n"
@@ -2949,7 +2944,7 @@ mmx_predict(unsigned char *from, int d2x, int d2y,
 		for (i = 0; i < 8; i++) {
 			asm volatile (
 				" pushl		%1\n"
-				" movzbl	(%0),%1;\n"
+				" movzxb	(%0),%1;\n"
 				" movd		%1,%%mm1;\n"
 				" popl		%1\n"
 				" movq		1(%0),%%mm2;\n"
@@ -2965,7 +2960,7 @@ mmx_predict(unsigned char *from, int d2x, int d2y,
 				" paddw		%%mm2,%%mm0;\n"
 				" paddw		%%mm3,%%mm1;\n"
 				" pushl		%1\n"
-				" movzbl	(%0,%2),%1;\n"
+				" movzxb	(%0,%2),%1;\n"
 				" movd		%1,%%mm3;\n"
 				" popl		%1\n"
 				" movq		1(%0,%2),%%mm2;\n"
@@ -2996,7 +2991,7 @@ mmx_predict(unsigned char *from, int d2x, int d2y,
 				" movq		%%mm3,0*768+4*128+8(%1);\n"
 
 				" pushl		%1\n"
-				" movzbl	(%3),%1;\n"
+				" movzxb	(%3),%1;\n"
 				" movd		%1,%%mm1;\n"
 				" popl		%1\n"
 				" movq		1(%3),%%mm2;\n"
@@ -3012,7 +3007,7 @@ mmx_predict(unsigned char *from, int d2x, int d2y,
 				" paddw		%%mm2,%%mm0;\n"
 				" paddw		%%mm3,%%mm1;\n"
 				" pushl		%1\n"
-				" movzbl	(%3,%2),%1;\n"
+				" movzxb	(%3,%2),%1;\n"
 				" movd		%1,%%mm3;\n"
 				" popl		%1\n"
 				" movq		1(%3,%2),%%mm2;\n"
@@ -3157,7 +3152,6 @@ tmp_search(int *dhx, int *dhy, unsigned char *from,
 	hrange = (range > 8) ? ((range + 15) & -16) >> 1 : 4; 
 	vrange >>= 2;
 
-	/* this can be de-branched and vectorized */
 	if (__builtin_expect(x0 < 0, 0)) {
 		x0 = 0;
 		x1 = hrange;
@@ -3182,7 +3176,14 @@ tmp_search(int *dhx, int *dhy, unsigned char *from,
 	bbmin = MMXRW(0xFFFE - 0x8000);
 	bbdxy = MMXRW(0x0000);
 
-	/* note cpu_type is const */
+#if 0
+	{
+		extern void mmx_emu_setverbose(int);
+
+		mmx_emu_setverbose(0);
+	}
+#endif
+
 	switch (cpu_type) {
 	case CPU_PENTIUM_4:
 #if USE_SSE2
@@ -3404,7 +3405,6 @@ tmp_search(int *dhx, int *dhy, unsigned char *from,
 			act = mmx_sad2h(tbuf, *pat1, idown, &act2);
 			break;
 		}
-		mini[1][1] = act;
 	}
 
 	switch (cpu_type) {
@@ -3430,11 +3430,6 @@ tmp_search(int *dhx, int *dhy, unsigned char *from,
 			act = mini[j+1][i+1];
 
 			/* XXX inaccurate */
-			/* the idea here is to make interpolated blocks
-			 * a little more expensive, which look nice in
-			 * SAD but not human eyes.
-			 * XXX do act *= 16 + 3 etc and forget >> 4
-			 */
 			if (((dx + i) & (dy + j)) & 1)
 				act += (act * 3) >> 4;
 			else if (((dx + i) | (dy + j)) & 1)
@@ -3450,9 +3445,7 @@ tmp_search(int *dhx, int *dhy, unsigned char *from,
 		}
 	}
 
-#if TEST11
 bail_out:
-#endif
 	if (ii == 0) {
 		ibuf = pat1;
 		if (jj != 0) {
@@ -3484,8 +3477,6 @@ _3dn_search(int *dhx, int *dhy, unsigned char *from,
 {
 	return tmp_search(dhx, dhy, from, x, y, range, dest, CPU_K6_2);
 }
-
-/* PIII and Athlon */
 
 unsigned int
 sse_search(int *dhx, int *dhy, unsigned char *from,
@@ -3633,7 +3624,7 @@ predict_forward_motion(struct motion *M, unsigned char *from, int dist)
 }
 
 unsigned int
-predict_bidirectional_motion(mpeg1_context *mpeg1, struct motion *M,
+predict_bidirectional_motion(struct motion *M,
 	unsigned int *vmc1, unsigned int *vmc2, int bdist /* forward */)
 {
 	int i, j, si, sf, sb;
@@ -3647,7 +3638,7 @@ predict_bidirectional_motion(mpeg1_context *mpeg1, struct motion *M,
 	pmy2 = &M[1].MV[1];
 
 	if (0 && pdx[mb_row][mb_col] < 127) {
-		sf = t4_edu(mpeg1->oldref, pmx1, pmy1,
+		sf = t4_edu(oldref, pmx1, pmy1,
 			+pdx[mb_row][mb_col] * bdist / pdist,
 			+pdy[mb_row][mb_col] * bdist / pdist,
 			MIN(M[0].src_range, 8), M[0].max_range,
@@ -3658,7 +3649,7 @@ predict_bidirectional_motion(mpeg1_context *mpeg1, struct motion *M,
 			MIN(M[1].src_range, 8), M[1].max_range,
 			mblock[2]); // 2 + 4
 	} else {
-		sf = search(pmx1, pmy1, mpeg1->oldref,
+		sf = search(pmx1, pmy1, oldref,
 			mb_col * 16, mb_row * 16,
 			M[0].src_range, mblock[1]); // 1 + 3
 		sb = search(pmx2, pmy2, newref,
@@ -3935,4 +3926,3 @@ predict_bidirectional_planar(unsigned char *from1, unsigned char *from2,
 
 	return si * 256;
 }
-

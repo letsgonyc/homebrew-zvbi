@@ -5,8 +5,20 @@
 #include <stdlib.h>
 #include "../dsputil.h"
   
-/* need this external function to solve -fPIC ebx issues ! */
-extern void cpuid(int index, int *eax, int *ebx, int *ecx, int *edx);
+/* ebx saving is necessary for PIC. gcc seems unable to see it alone
+ */
+static inline void cpuid(int index, int *eax,
+			 int *ebx, int *ecx,
+			 int *edx)
+{
+  asm ("movl %%ebx, %%esi\n\t"
+       "cpuid\n\t"
+       "xchgl %%ebx, %%esi"
+       : "=a" (eax), "=S" (ebx),
+       "=c" (ecx), "=d" (edx)
+       : "0" (index)
+       : "cc");
+}
 
 /* Function to test if multimedia instructions are supported...  */
 int mm_support(void)

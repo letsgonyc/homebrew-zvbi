@@ -6,8 +6,9 @@
  *  Copyright (C) 1996 ISO MPEG Audio Subgroup Software Simulation Group
  *
  *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License version 2 as
- *  published by the Free Software Foundation.
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
  *
  *  This program is distributed in the hope that it will be useful,
  *  but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -19,7 +20,7 @@
  *  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-/* $Id: psycho.c,v 1.5 2001-11-27 04:38:24 mschimek Exp $ */
+/* $Id: psycho.c,v 1.1.1.1 2001-08-07 22:09:37 garetxe Exp $ */
 
 #include "../common/log.h"
 #include "../common/mmx.h"
@@ -34,7 +35,7 @@ static float		static_snr[SBLIMIT] __attribute__ ((aligned (CACHE_LINE)));
 /* Initialization */
 
 static void
-create_absthres(mp2_context *mp2, int sampling_freq)
+create_absthres(struct audio_seg *mp2, int sampling_freq)
 {
 	int table, i, higher, lower = 0;
 
@@ -58,7 +59,7 @@ create_absthres(mp2_context *mp2, int sampling_freq)
 }
 
 void
-mp1e_mp2_psycho_init(mp2_context *mp2, int sampling_freq)
+psycho_init(struct audio_seg *mp2, int sampling_freq, int psycho_loops)
 {
 	static const float crit_band[27] = {
 		0, 100, 200, 300, 400, 510, 630, 770,
@@ -78,40 +79,31 @@ mp1e_mp2_psycho_init(mp2_context *mp2, int sampling_freq)
 	int numlines[CBANDS];
 	int i, j, k, b;
 
-	mp2->e_save_old    = mp2->e_save[0][1];
-	mp2->e_save_oldest = mp2->e_save[0][0];
-	mp2->h_save_new    = mp2->h_save[0][2];
-	mp2->h_save_old    = mp2->h_save[0][1];
-	mp2->h_save_oldest = mp2->h_save[0][0];
-
-	for (i = 0; i < CBANDS; i++) {
-		bval[i] = 26.0;
-		numlines[i] = 0;
-	}
+	mp2->psycho_loops = saturate(psycho_loops, 0, 2);
 
 	create_absthres(mp2, sampling_freq);
 
-	/* Compute fft frequency multiplicand */
+	// Compute fft frequency multiplicand
 
 	freq_mult = (double) sampling_freq / BLKSIZE;
 
-	/* Calculate fft frequency, then bark value of each line */
+	// Calculate fft frequency, then bark value of each line
 	
-	for (i = 0; i < HBLKSIZE; i++) { /* 513 */
+	for (i = 0; i < HBLKSIZE; i++) { // 513
 		temp1 = i * freq_mult;
 		for (j = 1; temp1 > crit_band[j]; j++);
 		temp[i] = j - 1 + (temp1 - crit_band[j - 1]) / (crit_band[j] - crit_band[j - 1]);
 	}
 
 	mp2->partition[0] = 0;
-	temp2 = 1; /* counter of the # of frequency lines in each partition */
+	temp2 = 1; // counter of the # of frequency lines in each partition
 	bval[0] = temp[0];
 	bval_lo = temp[0];
 
 	for (i = 1; i < HBLKSIZE; i++) {
 		if ((temp[i] - bval_lo) > 0.33) {
 			mp2->partition[i] = mp2->partition[i - 1] + 1;
-			bval[(int) mp2->partition[i - 1]] /= temp2;
+			bval[(int) mp2->partition[i - 1]] = bval[(int) mp2->partition[i - 1]] / temp2;
 			bval[(int) mp2->partition[i]] = temp[i];
     			bval_lo = temp[i];
     			numlines[(int) mp2->partition[i - 1]] = temp2;
@@ -124,7 +116,7 @@ mp1e_mp2_psycho_init(mp2_context *mp2, int sampling_freq)
 	}
 
 	numlines[(int) mp2->partition[i - 1]] = temp2;
-	bval[(int) mp2->partition[i - 1]] /= temp2;
+	bval[(int) mp2->partition[i - 1]] = bval[(int) mp2->partition[i - 1]] / temp2;
 
 	/*
 	 *  Compute the spreading function, s[j][i], the value of the
@@ -156,13 +148,13 @@ mp1e_mp2_psycho_init(mp2_context *mp2, int sampling_freq)
 	for (b = 0; b < CBANDS; b++) {
 		double NMT, TMN, minval, bc, rnorm;
 
-		/* Noise Masking Tone value (in dB) for all partitions */
+		// Noise Masking Tone value (in dB) for all partitions
 		NMT = 5.5;
 
-		/* Tone Masking Noise value (in dB) for this partition */
+		// Tone Masking Noise value (in dB) for this partition
 		TMN = MAX(15.5 + bval[b], 24.5);
 
-		/* SNR lower limit */
+		// SNR lower limit
 		minval = bmax[(int)(bval[b] + 0.5)];
 
 		bc = (TMN - NMT) * 0.1;
@@ -177,14 +169,14 @@ mp1e_mp2_psycho_init(mp2_context *mp2, int sampling_freq)
 			mp2->p1[b] = pow(0.05 * 2.0, bc);
 		}
 
-		/* Calculate normalization factor for the net spreading function */
+		// Calculate normalization factor for the net spreading function
 
 		for (i = 0, rnorm = 0.0; i < CBANDS; i++)
 			rnorm += s[b][i];
 
 		mp2->xnorm[b] = pow(10.0, -NMT * 0.1) / (rnorm * numlines[b]);
 
-		/* Pack spreading function */
+		// Pack spreading function
 
 	        for (k = 0; s[b][k] == 0.0; k++);
 			mp2->s_limits[b].off = k;
@@ -195,8 +187,8 @@ mp1e_mp2_psycho_init(mp2_context *mp2, int sampling_freq)
 
 	for (i = 0; i < 3; i++)
 		for (j = 0; j < HBLKSIZE; j++) {
-			mp2->h_save[0][i][j] = 1.0; /* force oldest, old phi = 0.0 */
-			mp2->e_save[0][i & 1][j] = 1.0; /* should be 0.0, see below */
+			aseg.h_save[0][i][j] = 1.0; // force oldest, old phi = 0.0
+			aseg.e_save[0][i & 1][j] = 1.0; // should be 0.0, see below
 		}
 
 	for (j = 0; j < SBLIMIT; j++)
@@ -216,7 +208,7 @@ mp1e_mp2_psycho_init(mp2_context *mp2, int sampling_freq)
  *  the mnr_incr calculation and bit allocation has been modified accordingly.
  */
 void
-mp1e_mp2_psycho(mp2_context *mp2, short *buffer, float *snr, int step)
+psycho(struct audio_seg *mp2, short *buffer, float *snr, int step)
 {
 	int i, j;
 
@@ -237,9 +229,9 @@ mp1e_mp2_psycho(mp2_context *mp2, short *buffer, float *snr, int step)
 		pr_start(30, "FFT & Hann window");
 
 		if (step == 1)
-			mp1e_mp2_fft_step_1(buffer, mp2->h_save_new);
+			fft_step_1(buffer, mp2->h_save_new);
 		else
-			mp1e_mp2_fft_step_2(buffer, mp2->h_save_new);
+			fft_step_2(buffer, mp2->h_save_new);
 
 		pr_end(30);
 
@@ -298,10 +290,10 @@ mp1e_mp2_psycho(mp2_context *mp2, short *buffer, float *snr, int step)
 			temp3 = e_sqrt + fabs(r_prime);
 
 			if (temp3 == 0.0)
-				; /* mp2->grouped[pt].c += energy * 0.0; */
+				; // mp2->grouped[pt].c += energy * 0.0;
 			else {
 				double c1, s1, c2, s2, ll;
-/* original code
+/* pre opt
 				double phi = atan2(i0, r0);
 				double phi_prime = 2.0 * atan2(i1, r1) - atan2(i2, r2);
 
@@ -322,9 +314,8 @@ mp1e_mp2_psycho(mp2_context *mp2, short *buffer, float *snr, int step)
 
 				r_prime /= ll * mp2->e_save_oldest[j];
 				/*
-				 *  This should be r_prime /= ll * sqrt(r2 * r2 + i2 * i2),
-				 *  initializing e_save to all zeroes. By initializing to all
-				 *  ones we can omit one sqrt(). The +1 error in temp3
+				 *  This should be r_prime /= ll * sqrt(r2 * r2 + i2 * i2), initializing e_save with all
+				 *  zeroes. By initializing to all ones we can omit one sqrt(). The +1 error in temp3
 				 *  (frame #1 only) is negligible.
 				 */
 
@@ -407,8 +398,7 @@ mp1e_mp2_psycho(mp2_context *mp2, short *buffer, float *snr, int step)
 					ecb *= mp2->xnorm[j];
 
 			    		if (cb < 0.05)
-						/* pow(0.05 * 2.0, 1.9); */
-						mp2->nb[j] = ecb * 0.0125892541179416766333743;
+						mp2->nb[j] = ecb * 0.0125892541179416766333743; // pow(0.05 * 2.0, 1.9);
 					else if (cb > 0.5 || cb > mp2->p1[j])
 						mp2->nb[j] = ecb * mp2->p2[j];
 					else
@@ -416,7 +406,7 @@ mp1e_mp2_psycho(mp2_context *mp2, short *buffer, float *snr, int step)
 				}
 			}
 
-			for (; j < CBANDS; j++) { /* 63 */
+			for (; j < CBANDS; j++) { // 63
 				double ecb = 0.0, cb = 0.0;
 				int k, cnt = mp2->s_limits[j].cnt, off = mp2->s_limits[j].off;
 
@@ -435,8 +425,7 @@ mp1e_mp2_psycho(mp2_context *mp2, short *buffer, float *snr, int step)
 					if (cb < 0.05)
 						mp2->nb[j] = ecb * mp2->p1[j];
 					else if (cb > 0.5)
-						/* not exactly, but the error is negligible */
-						mp2->nb[j] = ecb; 
+						mp2->nb[j] = ecb; // not exactly, but the error is negligible
 					else if (cb > mp2->p3[j - 20])
 						mp2->nb[j] = ecb * pow(cb * 2.0, mp2->p4[j - 20]);
 					else
@@ -464,8 +453,7 @@ mp1e_mp2_psycho(mp2_context *mp2, short *buffer, float *snr, int step)
 				int k;
 
 				for (k = 0; k < 17; k++) {
-					double fthr = MAX(mp2->absthres[j * 16 + k],
-							  mp2->nb[(int) mp2->partition[j * 16 + k]]);
+					double fthr = MAX(mp2->absthres[j * 16 + k], mp2->nb[(int) mp2->partition[j * 16 + k]]);
 
 					if (minthres > fthr)
 						minthres = fthr;
@@ -479,8 +467,7 @@ mp1e_mp2_psycho(mp2_context *mp2, short *buffer, float *snr, int step)
 				int k;
 
 				for (k = 0; k < 17; k++)
-					minthres += MAX(mp2->absthres[j * 16 + k],
-							mp2->nb[(int) mp2->partition[j * 16 + k]]);
+					minthres += MAX(mp2->absthres[j * 16 + k], mp2->nb[(int) mp2->partition[j * 16 + k]]);
 
 				snr[j] = mp2->sum_energy[j] / minthres;
 			}
@@ -490,8 +477,7 @@ mp1e_mp2_psycho(mp2_context *mp2, short *buffer, float *snr, int step)
 				int k;
 
 				for (k = 0; k < 17; k++) {
-					double fthr = MAX(mp2->absthres[j * 16 + k],
-							  mp2->nb[(int) mp2->partition[j * 16 + k]]);
+					double fthr = MAX(mp2->absthres[j * 16 + k], mp2->nb[(int) mp2->partition[j * 16 + k]]);
 
 					if (minthres > fthr)
 						minthres = fthr;
@@ -506,8 +492,7 @@ mp1e_mp2_psycho(mp2_context *mp2, short *buffer, float *snr, int step)
 				int k;
 
 				for (k = 0; k < 17; k++)
-					minthres += MAX(mp2->absthres[j * 16 + k],
-							mp2->nb[(int) mp2->partition[j * 16 + k]]);
+					minthres += MAX(mp2->absthres[j * 16 + k], mp2->nb[(int) mp2->partition[j * 16 + k]]);
 
 				t = mp2->sum_energy[j] / minthres;
 				if (t > snr[j]) snr[j] = t;

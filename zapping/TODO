@@ -1,50 +1,12 @@
-Outstanding issues for the next release (0.6.2)
------------------------------------------------
-> 0.6.3
-	+ Improve documentation.
-	+ TTX export: Make blockgfx replacement smarter.
-	+ vbi: add toggle button to disable CC/TTX decoding
-          (independent of station name decoding, that is). Mind
-	  listing subtitles. Should also disable trigger
-          decoding when all set to ignore.
-	+ rte: We need a TODO/Changelog for this, do not forget
-	+ Look into scripting.
-	+ Examine the possiblity of linking movie titles, VBI plugin API.
-	+ Streaming ASCII plugin.
-	+ zapzilla: channel selector, properties.
-	+ Finish parrot buffer for observing parrots.
-	+ libvbi: SGML error reporting.
-	+ Get thumbnails of all tuned channels.
-	+ Think about ttx header samples (p100) for stations not transmitting
-	  a CNI (instead of guessing the name from ttx). Needs some sort of
-	  raw dump, so users can send updates. Upd: Oops, we do have a raw
-	  dump: VTX.
-	+ Take TTX out of the context menus when Zapping doesn't
-	  receive TTX. (event timestamps?)
-	+ TTX program name
-	+ Volume bindings
-	+ Make Zapping UTF-8 clean (for now by moving all string ops
-          into one place, propose zmisc.c, avoiding strlen etc).
-	+ Finish WSS.
-
-> 0.7.0
-	+ Support for Python scripting, write all new gui handling as
-	Python code.
-	+ Add some remote control applet, or sth like that (moved here
-	because it will use scripting).
-	+ --roottv switch (use Z as screensaver)
-
-> Somewhen...
-	+ Do realtime effects to the image, plainly wonderful, see
-	http://matsu-www.is.titech.ac.jp/~fukuchi/rooms/EffecTV/index.html
-	+ More compression formats.
-	+ Trigger: Close should remember it had been clicked already
-	  when a trigger is merely repeated.
-	+ Recording schedule.
-	+ Screenshot plugin: subtitle overlay
-	+ TTX export ANSI colors needs improvement.
-	+ Mpeg plugin/mp1e very low frame rate interrupts display,
-	  probably a scheduling issue. Investigate if/how this can be avoided.
-
-please tell me about anything you think it's worth adding. 
-garetxe@users.sourceforge.net
+Outstanding issues for the next release
+---------------------------------------
+	+ Add plugin support and convert PNG saving into a plugin
+	+ Add some sort of AVI capture
+	+ Report "Control always 0 first time it's read" bug
+	+ Add perfomance test (full v4l2 /dev/video use implemented?)
+	+ Add the help for the Properties
+	+ Full i18n
+	+ Add desktop (and root menu) entries
+	+ Get rid of those annoying warnings about io.c
+	+ Fix all fixme's
+	+ Bug Track

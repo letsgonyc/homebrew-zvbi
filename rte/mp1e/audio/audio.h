@@ -4,8 +4,9 @@
  *  Copyright (C) 1999-2000 Michael H. Schimek
  *
  *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License version 2 as
- *  published by the Free Software Foundation.
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
  *
  *  This program is distributed in the hope that it will be useful,
  *  but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -17,26 +18,31 @@
  *  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-/* $Id: audio.h,v 1.10 2001-10-21 05:08:48 mschimek Exp $ */
+/* $Id: audio.h,v 1.1.1.1 2001-08-07 22:09:51 garetxe Exp $ */
 
-#include <stdint.h>
 #include <pthread.h>
 #include "../common/fifo.h"
 #include "../common/bstream.h"
-#include "../common/sync.h"
-
-#include "libaudio.h"
 #include "mpeg.h"
+
+struct pcm_context {
+	fifo2		fifo;
+	producer	producer;
+
+	int		sampling_rate;
+	bool		stereo;
+};
 
 #define BLKSIZE 1024
 #define HBLKSIZE 513
 #define CBANDS 63
 #define e_save_new e_save_oldest
 
-typedef struct mp2_context {
-	/* Buffers */
+extern struct audio_seg
+{
+	struct bs_rec		out;
 
-	unsigned char		wrap[(SAMPLES_PER_FRAME + 512 - 32) * 4];
+	/* Buffers */
 
 	int			sb_samples[2][3][12][SBLIMIT];	// channel, scale group, sample
 	char			bit_alloc[2][SBLIMIT];
@@ -51,8 +57,6 @@ typedef struct mp2_context {
 	float			mnr[2][SBLIMIT];
 	int			sblimit;
 	int			sum_nbal;
-
-	struct bs_rec		out;
 
 	/* Tables */
 
@@ -97,64 +101,48 @@ typedef struct mp2_context {
 	FLOAT *			h_save_new;
 	FLOAT *			h_save_old;
 	FLOAT *			h_save_oldest;
-
 	int			psycho_loops;
 
-	/* Input */
+	unsigned char		wrap[(SAMPLES_PER_FRAME + 512 - 32) * 4]
+		__attribute__ ((aligned (CACHE_LINE)));
+
+	/* Misc */
 
 	consumer		cons;
-	buffer *		ibuf;
-	unsigned int		i16, e16, incr;
-	double			nominal_time_elapsed;
-	double			nominal_sample_period;
-	synchr_stream 		sstr;
-	uint32_t		format_sign;
-	bool			format_scale;
-
-	/* Output */
-
-	fifo *			fifo;
-	producer		prod;
+	buffer2 *		ibuf;
+	unsigned char		*p, *o;
+	int			left, offs;
+	double			time;
 
 	unsigned int		header_template;
-	double			coded_frame_period;
+	double			frame_period;
 	int			sampling_freq;
 	int			bits_per_frame;
 	int			spf_rest, spf_lag;
 
-	/* Options */
-
-	rte_codec		codec;
-
-	int			mpeg_version;
-	int			sampling_freq_code;
-	int			bit_rate_code;
-	int			audio_mode;
-
-} mp2_context;
+	int			audio_frame_count;
+} aseg;
 
 /* psycho.c */
 
-extern void		mp1e_mp2_psycho_init(mp2_context *, int sampling_freq);
-extern void		mp1e_mp2_psycho(mp2_context *, short *, float *, int);
+extern void		psycho_init(struct audio_seg *, int, int);
+extern void		psycho(struct audio_seg *, short *, float *, int);
 
 /* fft.c */
 
-extern void		mp1e_mp2_fft_init(int test);
-extern void		mp1e_mp2_fft_step_1(short *, FLOAT *);
-extern void		mp1e_mp2_fft_step_2(short *, FLOAT *);
+extern void		fft_step_1(short *, FLOAT *);
+extern void		fft_step_2(short *, FLOAT *);
 
 /* filter.c */
 
-extern void		mp1e_mp2_subband_filter_init(int test);
-
-extern void		mp1e_mp2_mmx_window_mono(short *z, mmx_t *) __attribute__ ((regparm (2)));
-extern void		mp1e_mp2_mmx_window_left(short *z, mmx_t *) __attribute__ ((regparm (2)));
-extern void		mp1e_mp2_mmx_window_right(short *z, mmx_t *) __attribute__ ((regparm (2)));
-extern void		mp1e_mp2_mmx_filterbank(int *, mmx_t *) __attribute__ ((regparm (2)));
+extern void		subband_filter_init(struct audio_seg *mp2);
+extern void		mmx_window_mono(short *z, mmx_t *) __attribute__ ((regparm (2)));
+extern void		mmx_window_left(short *z, mmx_t *) __attribute__ ((regparm (2)));
+extern void		mmx_window_right(short *z, mmx_t *) __attribute__ ((regparm (2)));
+extern void		mmx_filterbank(int *, mmx_t *) __attribute__ ((regparm (2)));
 
 static inline void
-mmx_filter_mono(mp2_context *mp2, short *p, int *samples)
+mmx_filter_mono(struct audio_seg *mp2, short *p, int *samples)
 {
 	int j;
 
@@ -164,15 +152,15 @@ mmx_filter_mono(mp2_context *mp2, short *p, int *samples)
 	mp2->sf.fb_temp[1].d[1] = 32768L;
 
 	for (j = 0; j < 3 * SCALE_BLOCK; j++, p += 32, samples += 32) {
-		mp1e_mp2_mmx_window_mono(p, mp2->sf.fb_temp);
-		mp1e_mp2_mmx_filterbank(samples, mp2->sf.fb_temp);
+		mmx_window_mono(p, mp2->sf.fb_temp);
+		mmx_filterbank(samples, mp2->sf.fb_temp);
 	}
 
 	emms();
 }
 
 static inline void
-mmx_filter_stereo(mp2_context *mp2, short *p, int *samples)
+mmx_filter_stereo(struct audio_seg *mp2, short *p, int *samples)
 {
 	int j;
 
@@ -186,11 +174,11 @@ mmx_filter_stereo(mp2_context *mp2, short *p, int *samples)
 		 *  Subband window code could be optimized,
 		 *  I've just adapted the mono version.
 		 */
-		mp1e_mp2_mmx_window_left(p, mp2->sf.fb_temp);
-		mp1e_mp2_mmx_filterbank(samples, mp2->sf.fb_temp);
+		mmx_window_left(p, mp2->sf.fb_temp);
+		mmx_filterbank(samples, mp2->sf.fb_temp);
 
-		mp1e_mp2_mmx_window_right(p, mp2->sf.fb_temp);
-		mp1e_mp2_mmx_filterbank(samples + 3 * SCALE_BLOCK * 32, mp2->sf.fb_temp);
+		mmx_window_right(p, mp2->sf.fb_temp);
+		mmx_filterbank(samples + 3 * SCALE_BLOCK * 32, mp2->sf.fb_temp);
 	}
 
 	emms();

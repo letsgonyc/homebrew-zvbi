@@ -7,8 +7,9 @@
  *  and released to public domain 11/22/93.
  *
  *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License version 2 as
- *  published by the Free Software Foundation.
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) version 2.
  *
  *  This program is distributed in the hope that it will be useful,
  *  but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -20,7 +21,7 @@
  *  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-/* $Id: dct_ieee.h,v 1.4 2001-10-08 19:51:46 garetxe Exp $ */
+/* $Id: dct_ieee.h,v 1.1.1.1 2001-08-07 22:10:04 garetxe Exp $ */
 
 #include <stdio.h>
 #include <string.h>
@@ -46,8 +47,6 @@
 #define S18 ((double)(1 << 18))
 #define S19 ((double)(1 << 19))
 
-/*
-
 typedef void dct_func(short [8][8]);
 typedef void qdct_func(int q, short [8][8]);
 
@@ -69,9 +68,7 @@ extern void ieee_idct_test(char *name, dct_func *idct, long minpix, long maxpix,
 extern void fdct_test(char *name, dct_func *fdct, long minpix, long maxpix, long sign, int iterations);
 extern void ieee_1180(char *name, dct_func *idct);
 
-*/
-
-#define __elements(block) (sizeof(block) / sizeof((block)[0][0]))
+#define elements(block) (sizeof(block) / sizeof((block)[0][0]))
 
 #define mirror(block)						\
 do {								\
@@ -84,21 +81,21 @@ do {								\
 #define trans(block, n)						\
 do {								\
 	int _i;							\
-	for (_i = 0; _i < __elements(block); _i++)		\
+	for (_i = 0; _i < elements(block); _i++)		\
 		(block)[0][_i] += n;				\
 } while (0)
 
 #define copy(d, s)						\
 do {								\
 	int _i;							\
-	for (_i = 0; _i < __elements(d); _i++)			\
+	for (_i = 0; _i < elements(d); _i++)			\
 		(d)[0][_i] = (s)[0][_i];			\
 } while (0)
 
 #define clear(block)						\
 do {								\
 	int _i;							\
-	for (_i = 0; _i < __elements(block); _i++)		\
+	for (_i = 0; _i < elements(block); _i++)		\
 		(block)[0][_i] = 0.0;				\
 } while (0)
 
@@ -107,7 +104,7 @@ do {								\
 	int _i;							\
 	int _j = sizeof((block)[0]) / sizeof((block)[0][0]);	\
 	fprintf(stderr, #block ":\n");				\
-	for (_i = 0; _i < __elements(block); _i++)		\
+	for (_i = 0; _i < elements(block); _i++)		\
 		fprintf(stderr, "%11.4f%c",			\
 			(double)(block)[0][_i],			\
 			(_i % _j == _j - 1) ? '\n' : ' ');	\
@@ -118,7 +115,7 @@ do {								\
 do {								\
 	int _i;							\
 	double _min = 1e30, _max = -1e30;			\
-	for (_i = 0; _i < __elements(block); _i++)		\
+	for (_i = 0; _i < elements(block); _i++)		\
 		if ((block)[0][_i] < _min)			\
 			_min = (block)[0][_i];			\
 		else if ((block)[0][_i] > _max)			\
@@ -130,11 +127,7 @@ do {								\
 #define maxabs(res, bl1, bl2)					\
 do {								\
 	int _i;							\
-	for (_i = 0; _i < __elements(res); _i++)			\
+	for (_i = 0; _i < elements(res); _i++)			\
 		(res)[0][_i] = MAX(fabs((bl1)[0][_i]),		\
 			fabs((bl2)[0][_i]));			\
 } while (0)
-
-
-
-

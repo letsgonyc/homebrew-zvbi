@@ -4,8 +4,9 @@
  *  Copyright (C) 2000 Michael H. Schimek
  *
  *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License version 2 as
- *  published by the Free Software Foundation.
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
  *
  *  This program is distributed in the hope that it will be useful,
  *  but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -17,7 +18,7 @@
  *  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-/* $Id: preview.c,v 1.5 2001-10-16 11:18:17 mschimek Exp $ */
+/* $Id: preview.c,v 1.1.1.1 2001-08-07 22:09:27 garetxe Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #  include <config.h>
@@ -91,8 +92,7 @@ static struct test_capture_param params[] =
 
 static int num_params = sizeof(params)/sizeof(struct test_capture_param);
 
-#include "../video/video.h"
-
+extern int video_bit_rate;
 extern int video_do_reset;
 extern int force_drop_rate;
 extern int p_inter_bias;
@@ -110,11 +110,11 @@ on_capture_param_changed(GtkAdjustment *adj,
 
 	switch (i) {
 	case 0:
-//		value = value * 1e6;
-//		if (value != vseg.video_bit_rate) {
-//			vseg.video_bit_rate = value;
-//			video_do_reset = 1;
-//		}
+		value = value * 1e6;
+		if (value != video_bit_rate) {
+			video_bit_rate = value;
+			video_do_reset = 1;
+		}
 		break;
 	case 1:
 		force_drop_rate = value;
@@ -425,7 +425,6 @@ gtk_main_thread(void * unused)
 
 void
 packed_preview(unsigned char *buffer, int mb_cols, int mb_rows)
-
 {
 }
 
