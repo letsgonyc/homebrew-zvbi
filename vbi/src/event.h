@@ -21,7 +21,7 @@
  *  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-/* $Id: event.h,v 1.7 2002-12-24 15:44:32 mschimek Exp $ */
+/* $Id: event.h,v 1.5 2002-10-22 04:41:18 mschimek Exp $ */
 
 #ifndef EVENT_H
 #define EVENT_H
@@ -54,6 +54,15 @@ typedef struct vbi_decoder vbi_decoder;
  * pointed to from there must be read only. The data is only valid until
  * the handler returns.
  */
+
+/**
+ * @ingroup Event
+ * @brief Unique network id (a libzvbi thing).
+ *
+ * 0 = unknown network, bit 31 reserved for preliminary nuids.
+ * Other network codes are arbitrary.
+ */
+typedef unsigned int vbi_nuid;
 
 /**
  * @ingroup Event
@@ -380,26 +389,26 @@ typedef struct vbi_program_info {
 	/* 01 Program Identification Number */
 
 	/* If unknown all these fields are -1 */
-	signed char		month;		/* 0 ... 11 */
-	signed char		day;		/* 0 ... 30 */
-	signed char		hour;		/* 0 ... 23 */
-	signed char		min;		/* 0 ... 59 */
+	char			month;		/* 0 ... 11 */
+	char			day;		/* 0 ... 30 */
+	char			hour;		/* 0 ... 23 */
+	char			min;		/* 0 ... 59 */
 
 	/*
 	 *  VD: "T indicates if a program is routinely tape delayed for the
 	 *  Mountain and Pacific time zones."
 	 */
-	signed char		tape_delayed;
+	char			tape_delayed;
 
 	/* 02 Program Length */
 
 	/* If unknown all these fields are -1 */
-	signed char		length_hour;	/* 0 ... 63 */
-	signed char		length_min;	/* 0 ... 59 */
+	char			length_hour;	/* 0 ... 63 */
+	char			length_min;	/* 0 ... 59 */
 
-	signed char		elapsed_hour;	/* 0 ... 63 */
-	signed char		elapsed_min;	/* 0 ... 59 */
-	signed char		elapsed_sec;	/* 0 ... 59 */
+	char			elapsed_hour;	/* 0 ... 63 */
+	char			elapsed_min;	/* 0 ... 59 */
+	char			elapsed_sec;	/* 0 ... 59 */
 
 	/* 03 Program name */
 
@@ -442,7 +451,7 @@ typedef struct vbi_program_info {
 		/* If unknown mode == VBI_AUDIO_MODE_UNKNOWN */
 		vbi_audio_mode		mode;
 		/* If unknown language == NULL */
-		const unsigned char *	language; /* Latin-1 */
+		char *			language; /* Latin-1 */
 	}			audio[2];	/* primary and secondary */
 
 	/* 07 Program Caption Services */
